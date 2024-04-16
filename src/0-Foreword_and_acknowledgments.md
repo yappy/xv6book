@@ -56,7 +56,7 @@ Pawel Szczurko, Warren Toomey, tyfkda, tzerbib, Vanush Vaswani, Xi Wang, and Zou
 Sam Whitlock, LucyShawYang, and Meng Zhou
 
 If you spot errors or have suggestions for improvement, please send email to Frans Kaashoek
-and Robert Morris (kaashoek,rtm@csail.mit.edu).
+and Robert Morris.
 
 もし誤りを発見した、または改善の提案がある場合には、Frans Kaashoek とRobert Morris に
 メールしてほしい。
