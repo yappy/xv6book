@@ -1031,40 +1031,124 @@ while the file approach requires the first program to finish before the second s
 ## File system
 
 The xv6 file system provides data files, which contain uninterpreted byte arrays, and directories,
-which contain named references to data files and other directories. The directories form a tree,
-starting at a special directory called the root. A path like /a/b/c refers to the file or directory
-named c inside the directory named b inside the directory named a in the root directory /. Paths
-that don’t begin with / are evaluated relative to the calling process’s current directory, which can
-be changed with the chdir system call. Both these code fragments open the same file (assuming
-all the directories involved exist):
+which contain named references to data files and other directories.
+
+xv6 ファイルシステムはデータファイルを提供する。
+データファイルには内容が未解釈のバイト配列が入っている。
+また、ディレクトリも提供する。
+ディレクトリにはデータファイルや他のディレクトリへの名前付き参照が入っている。
+
+The directories form a tree, starting at a special directory called the root.
+
+ディレクトリ群ははツリー (木) の形をなし、ルートと呼ばれる特別なディレクトリから開始する。
+(注: root はグラフ理論では根と訳されるが、ルートディレクトリはルートと呼ばれることがほとんどである。)
+
+A path like /a/b/c refers to the file or directory
+named c inside the directory named b inside the directory named a in the root directory /.
+
+`/a/b/c` のようなパスは、ルートディレクトリ `/` の中の、a という名前のディレクトリの中の、
+b という名前のディレクトリの中の、c という名前のファイルまたはディレクトリを指す。
+
+Paths that don’t begin with / are evaluated relative to the calling process’s current directory,
+which can be changed with the chdir system call.
+
+`/` で始まらないパスは、呼び出しプロセスのカレントディレクトリからの相対で評価される。
+カレントディレクトリは chdir システムコールで変更できる。
+
+Both these code fragments open the same file (assuming all the directories involved exist):
+
+以下の両方のコードは同じファイルを開く(途中のディレクトリはすべて存在すると仮定する)。
+
+```C
 chdir("/a");
 chdir("b");
 open("c", O_RDONLY);
+```
+
+```C
 open("/a/b/c", O_RDONLY);
-The first fragment changes the process’s current directory to /a/b; the second neither refers to nor
-changes the process’s current directory.
-There are system calls to create new files and directories: mkdir creates a new directory, open
-with the O_CREATE flag creates a new data file, and mknod creates a new device file. This example
-illustrates all three:
+```
+
+The first fragment changes the process’s current directory to /a/b;
+the second neither refers to nor changes the process’s current directory.
+
+最初のコードはプロセスのカレントディレクトリを `/a/b` に変更する。
+2番目のコードはプロセスのカレントディレクトリを参照も変更もしていない。
+
+There are system calls to create new files and directories:
+mkdir creates a new directory,
+open with the O_CREATE flag creates a new data file,
+and mknod creates a new device file.
+
+新しいファイルやディレクトリを作成するシステムコールが存在する。
+`mkdir` は新しいディレクトリを作成する。
+`O_CREATE` フラグ付きの `open` は新しいデータファイルを作成する。
+`mknod` は新しいデバイスファイルを作成する。
+
+This example illustrates all three:
+
+以下の例は3種すべてを示している。
+
+```C
 mkdir("/dir");
 fd = open("/dir/file", O_CREATE|O_WRONLY);
 close(fd);
 mknod("/console", 1, 1);
-mknod creates a special file that refers to a device. Associated with a device file are the major and
-minor device numbers (the two arguments to mknod), which uniquely identify a kernel device.
-When a process later opens a device file, the kernel diverts read and write system calls to the
-kernel device implementation instead of passing them to the file system.
-17
-A file’s name is distinct from the file itself; the same underlying file, called an inode, can have
-multiple names, called links. Each link consists of an entry in a directory; the entry contains a file
-name and a reference to an inode. An inode holds metadata about a file, including its type (file or
-directory or device), its length, the location of the file’s content on disk, and the number of links to
-a file.
-The fstat system call retrieves information from the inode that a file descriptor refers to. It
-fills in a struct stat, defined in stat.h (kernel/stat.h) as:
+```
+
+mknod creates a special file that refers to a device.
+
+mknod はデバイスを参照するスペシャルファイルを作成する。
+
+Associated with a device file are the major and minor device numbers (the two arguments to mknod),
+which uniquely identify a kernel device.
+
+デバイスファイルに関連付けられるのはメジャーおよびマイナーのデバイス番号
+(mknod の2つの引数) である。
+これはカーネルデバイスをユニークに識別する。
+
+When a process later opens a device file, the kernel diverts read and write system calls
+to the kernel device implementation instead of passing them to the file system.
+
+この後プロセスがデバイスファイルを開いた時、カーネルは read と write のシステムコールを
+ファイルシステムに渡す代わりに、カーネルデバイス実装に転送する。
+
+A file’s name is distinct from the file itself;
+the same underlying file, called an inode, can have multiple names, called links.
+
+ファイル名はファイル自体とは別物である。
+ファイルの根底にあるデータは inode と呼ばれ、同じファイル (inode) が
+複数の名前を持つことができる。この名前はリンクと呼ばれる。
+
+Each link consists of an entry in a directory;
+the entry contains a file name and a reference to an inode.
+
+それぞれのリンクはディレクトリ内の1つのエントリである。
+このエントリにはファイル名と inode への参照が含まれている。
+
+An inode holds metadata about a file, including its type (file or directory or device),
+its length, the location of the file’s content on disk, and the number of links to a file.
+
+inode はファイルに関するメタデータを保持している。
+メタデータにはタイプ (ファイルまたはディレクトリまたはデバイス)、
+ファイルの長さ、ファイルの内容のディスク上での位置、そのファイルへのリンクの数、
+が含まれる。
+
+The fstat system call retrieves information from the inode that a file descriptor refers to.
+
+fstat システムコールはファイルディスクリプタが参照している inode から
+情報を取得する。
+
+It fills in a struct stat, defined in stat.h (kernel/stat.h) as:
+
+fstat は `struct stat` を埋める。
+`struct stat` は `stat.h` で以下のように定義されている(`kernel/stat.h`)。
+
+```C
 #define T_DIR 1 // Directory
 #define T_FILE 2 // File
 #define T_DEVICE 3 // Device
+
 struct stat {
 int dev; // File system’s disk device
 uint ino; // Inode number
@@ -1072,32 +1156,111 @@ short type; // Type of file
 short nlink; // Number of links to file
 uint64 size; // Size of file in bytes
 };
-The link system call creates another file system name referring to the same inode as an exist-
-ing file. This fragment creates a new file named both a and b.
+```
+
+The link system call creates another file system name referring to the same inode
+as an existing file.
+
+link システムコールは同じ inode を参照するもう1つのファイルシステム名を作成する。
+
+This fragment creates a new file named both a and b.
+
+以下のコードは a と b という両方の名前を持つ新しいファイルを作成する。
+
+```C
 open("a", O_CREATE|O_WRONLY);
 link("a", "b");
-Reading from or writing to a is the same as reading from or writing to b. Each inode is identified
-by a unique inode number. After the code sequence above, it is possible to determine that a and b
-refer to the same underlying contents by inspecting the result of fstat: both will return the same
-inode number (ino), and the nlink count will be set to 2.
-The unlink system call removes a name from the file system. The file’s inode and the disk
-space holding its content are only freed when the file’s link count is zero and no file descriptors
-refer to it. Thus adding
+```
+
+Reading from or writing to a is the same as reading from or writing to b.
+
+a を読み書きするのは b を読み書きするのと同じである。
+
+Each inode is identified by a unique inode number.
+
+それぞれの inode はユニークな inode 番号で識別される。
+
+After the code sequence above, it is possible to determine that a and b
+refer to the same underlying contents by inspecting the result of fstat:
+both will return the same inode number (ino), and the nlink count will be set to 2.
+
+上記コードの実行後、a と b は同じ内容を指していることが、fstat で調べることにより分かる。
+どちらの結果も同じ inode 番号 (ino) を返し、nlink カウントは 2 に設定されている。
+
+The unlink system call removes a name from the file system.
+
+unlink システムコールはファイルシステムから名前を削除する。
+
+The file’s inode and the disk space holding its content are only freed
+when the file’s link count is zero and no file descriptors refer to it.
+
+ファイルの inode とその内容を保持しているディスクスペースは、
+ファイルのリンクカウントが 0 でかつそれを参照するファイルディスクリプタが
+1つもない時にのみ解放される。
+
+Thus adding
+
+```C
 unlink("a");
-to the last code sequence leaves the inode and file content accessible as b. Furthermore,
+```
+
+to the last code sequence leaves the inode and file content accessible as b.
+
+したがって、これをコードの最後に追加しても、inode およびファイルの内容には
+b としてアクセス可能なままである。
+
+Furthermore,
+
+さらに、
+
+```C
 fd = open("/tmp/xyz", O_CREATE|O_RDWR);
 unlink("/tmp/xyz");
-is an idiomatic way to create a temporary inode with no name that will be cleaned up when the
-process closes fd or exits.
-Unix provides file utilities callable from the shell as user-level programs, for example mkdir,
-ln, and rm. This design allows anyone to extend the command-line interface by adding new user-
-level programs. In hindsight this plan seems obvious, but other systems designed at the time of
-Unix often built such commands into the shell (and built the shell into the kernel).
-One exception is cd, which is built into the shell (user/sh.c:161). cd must change the current
-working directory of the shell itself. If cd were run as a regular command, then the shell would
-18
-fork a child process, the child process would run cd, and cd would change the child ’s working
-directory. The parent’s (i.e., the shell’s) working directory would not change.
+```
+
+is an idiomatic way to create a temporary inode with no name
+that will be cleaned up when the process closes fd or exits.
+
+これはプロセスが fd を close する、またはプロセスが終了するときに自動的にクリーンアップされる
+名前なしのテンポラリ inode を作成する慣用的な(イディオム的な)方法である。
+
+Unix provides file utilities callable from the shell as user-level programs,
+for example mkdir, ln, and rm.
+
+Unix はユーザレベルプログラムとしてシェルから呼べるファイルユーティリティを提供する。
+例えば mkdir, ln, rm のようなものである。
+
+This design allows anyone to extend the command-line interface by
+adding new user-level programs.
+
+この設計により、新しいユーザレベルプログラムを追加すれば、
+誰もがコマンドラインインタフェースを拡張することができる。
+
+In hindsight this plan seems obvious, but other systems designed at the time of Unix
+often built such commands into the shell (and built the shell into the kernel).
+
+今になってみるとこのやり方は当たり前のようにも思えるが、Unix と同じ時代に
+設計された他のシステムではこのようなコマンドはシェルの中に組み込まれていた
+(そしてシェルはカーネルの中に組み込まれていた)。
+
+One exception is cd, which is built into the shell (user/sh.c:161).
+
+一つの例外は cd である。これはシェルの中に組み込まれている (user/sh.c:161)。
+
+cd must change the current working directory of the shell itself.
+
+cd はシェル自身のワーキングディレクトリを変更しなければならない。
+
+If cd were run as a regular command, then the shell would fork a child process,
+the child process would run cd, and cd would change the child ’s working directory.
+
+もし cd が通常のコマンドとして実行されたとしたら、シェルは子プロセスを fork し、
+子プロセスが cd を実行することになるが、すると cd は子プロセスの
+ワーキングディレクトリを変更することになる。
+
+The parent’s (i.e., the shell’s) working directory would not change.
+
+これでは親の (つまり、シェルの) ワーキングディレクトリは変更されない。
 
 ## Real world
 
