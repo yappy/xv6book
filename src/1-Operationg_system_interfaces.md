@@ -874,57 +874,159 @@ to a device like the console, or to a pipe.
 
 ## Pipes
 
-A pipe is a small kernel buffer exposed to processes as a pair of file descriptors, one for reading
-and one for writing. Writing data to one end of the pipe makes that data available for reading from
-the other end of the pipe. Pipes provide a way for processes to communicate.
-The following example code runs the program wc with standard input connected to the read
-end of a pipe.
+A pipe is a small kernel buffer exposed to processes as a pair of file descriptors,
+one for reading and one for writing.
+
+パイプとはファイルディスクリプタのペアとしてプロセスに公開された、小さなカーネルバッファである。
+ディスクリプタの片方は読み取り用で、もう片方は書き込み用である。
+
+Writing data to one end of the pipe makes that data available for
+reading from　the other end of the pipe.
+
+パイプの片側にデータを書き込むと、そのデータはもう一方の側から読み出せるようになる。
+
+Pipes provide a way for processes to communicate.
+
+パイプはプロセス同士が通信する方法を提供する。
+
+The following example code runs the program wc with standard input
+connected to the read end of a pipe.
+
+次のコード例はパイプの read 側に標準入力を接続した状態で wc プログラムを
+実行するものである。
+
+```C
 int p[2];
 char *argv[2];
+
 argv[0] = "wc";
 argv[1] = 0;
+
 pipe(p);
 if(fork() == 0) {
-close(0);
-dup(p[0]);
-close(p[0]);
-close(p[1]);
-exec("/bin/wc", argv);
+  close(0);
+  dup(p[0]);
+  close(p[0]);
+  close(p[1]);
+  exec("/bin/wc", argv);
 } else {
-close(p[0]);
-write(p[1], "hello world\n", 12);
-close(p[1]);
+  close(p[0]);
+  write(p[1], "hello world\n", 12);
+  close(p[1]);
 }
-The program calls pipe, which creates a new pipe and records the read and write file descriptors
-in the array p. After fork, both parent and child have file descriptors referring to the pipe. The
-child calls close and dup to make file descriptor zero refer to the read end of the pipe, closes the
-file descriptors in p, and calls exec to run wc. When wc reads from its standard input, it reads from
-the pipe. The parent closes the read side of the pipe, writes to the pipe, and then closes the write
-side.
-If no data is available, a read on a pipe waits for either data to be written or for all file descrip-
-tors referring to the write end to be closed; in the latter case, read will return 0, just as if the end of
-a data file had been reached. The fact that read blocks until it is impossible for new data to arrive
-is one reason that it’s important for the child to close the write end of the pipe before executing
-wc above: if one of wc ’s file descriptors referred to the write end of the pipe, wc would never see
-end-of-file.
-The xv6 shell implements pipelines such as grep fork sh.c | wc -l in a manner similar
-to the above code (user/sh.c:101). The child process creates a pipe to connect the left end of the
-pipeline with the right end. Then it calls fork and runcmd for the left end of the pipeline and
-fork and runcmd for the right end, and waits for both to finish. The right end of the pipeline
-may be a command that itself includes a pipe (e.g., a | b | c), which itself forks two new child
-processes (one for b and one for c). Thus, the shell may create a tree of processes. The leaves
-16
-of this tree are commands and the interior nodes are processes that wait until the left and right
-children complete.
-Pipes may seem no more powerful than temporary files: the pipeline
-echo hello world | wc
-could be implemented without pipes as
-echo hello world >/tmp/xyz; wc </tmp/xyz
-Pipes have at least three advantages over temporary files in this situation. First, pipes automatically
-clean themselves up; with the file redirection, a shell would have to be careful to remove /tmp/xyz
-when done. Second, pipes can pass arbitrarily long streams of data, while file redirection requires
-enough free space on disk to store all the data. Third, pipes allow for parallel execution of pipeline
-stages, while the file approach requires the first program to finish before the second starts.
+```
+
+The program calls pipe, which creates a new pipe and
+records the read and write file descriptors in the array p.
+
+このプログラムは pipe システムコールを呼び出す。
+pipe は新たなパイプを作成し、その読み取りと書き込みのファイルディスクリプタを
+配列 p の中に格納する。
+
+After fork, both parent and child have file descriptors referring to the pipe.
+
+fork の後、親と子の両方がそのパイプを参照するファイルディスクリプタを持つことになる。
+
+The child calls close and dup to make file descriptor zero refer to the read end of the pipe,
+closes the file descriptors in p, and calls exec to run wc.
+
+子は close と dup を呼び、ファイルディスクリプタ 0 をパイプの読み取り側を
+参照するようにする。
+p 内のファイルディスクリプタを close する。
+そして exec を呼んで wc コマンドを実行する。
+
+When wc reads from its standard input, it reads from the pipe.
+
+wc が標準入力から読み取る時、パイプから読み取ることになる。
+
+The parent closes the read side of the pipe, writes to the pipe,
+and then closes the write side.
+
+親はパイプの読み取り側を close し、パイプに書き込み、
+書き込み側を close する。
+
+If no data is available, a read on a pipe waits for either data to be written or
+for all file descriptors referring to the write end to be closed;
+in the latter case, read will return 0, just as if the end of a data file had been reached.
+
+もし利用可能なデータがないならば、パイプに対する read はデータが書き込まれる、
+または書き込み側を参照するすべてのファイルディスクリプタがクローズされる、
+のどちらかが起こるまで待つ。
+後者の場合、read は 0 を返す。
+これはデータファイルの終わりに達した時とちょうど同じである。
+
+The fact that read blocks until it is impossible for new data to arrive is
+one reason that it’s important for the child to close the write end of the pipe
+before executing wc above:
+if one of wc ’s file descriptors referred to the write end of the pipe,
+wc would never see end-of-file.
+
+新しいデータが到着するのが不可能になるまでの間 read がブロックするという事実は、
+子が wc を実行するより前にパイプの書き込み側を close するのが重要である理由の
+1つである。
+wc のファイルディスクリプタのうちの1つがパイプの書き込み側を参照していたら、
+wc は (注: stdin=pipe の) enf-of-file (EOF) を見ることができない。
+
+The xv6 shell implements pipelines such as `grep fork sh.c | wc -l`
+in a manner similar to the above code (user/sh.c:101).
+
+xv6 シェルは `grep fork sh.c | wc -l` のようなパイプラインを
+上記のコードと同じような形で実装している(`user/sh.c:101`)。
+
+The child process creates a pipe to connect the left end of the pipeline with the right end.
+
+子プロセスはパイプを生成してパイプラインの左端と右端をつなぐ。
+
+Then it calls fork and runcmd for the left end of the pipeline and fork and runcmd
+for the right end, and waits for both to finish.
+
+その後 fork と runcmd を左端に対して呼び出し、さらに fork と runcmd を右端に対しても呼び出し、
+両方が完了するのを待つ。
+
+The right end of the pipeline may be a command that itself includes a pipe (e.g., a | b | c),
+which itself forks two new child processes (one for b and one for c).
+
+パイプラインの右端はそれ自身がパイプを含む可能性がある (例: `a | b | c` 注: `b | c` の部分)。
+その場合はそこから 2 つの新しい子プロセスが fork されることとなる (b と c に対して)。
+
+Thus, the shell may create a tree of processes.
+したがって、シェルはプロセスのツリーを生成する可能性がある。
+
+The leaves of this tree are commands and the interior nodes are processes
+that wait until the left and right children complete.
+
+このツリーの葉はコマンドであり、内部ノードは左と右の子ノードの完了を待つプロセスである。
+(leaf: 末端のノードのこと。interior node: 末端以外のノードのこと。c.f. グラフ理論)
+
+Pipes may seem no more powerful than temporary files:
+the pipeline `echo hello world | wc` could be implemented without pipes as
+`echo hello world >/tmp/xyz; wc </tmp/xyz`
+
+パイプはテンポラリファイルより強力には見えないかもしれない。
+パイプライン `echo hello world | wc` はパイプラインを使わず
+`echo hello world >/tmp/xyz; wc </tmp/xyz` のように実現できる。
+
+Pipes have at least three advantages over temporary files in this situation.
+
+パイプにはこの状況において、テンポラリファイルに対して少なくとも3つのアドバンテージがある。
+
+First, pipes automatically clean themselves up;
+with the file redirection, a shell would have to be careful to remove `/tmp/xyz` when done.
+
+第一に、パイプは自動的にクリーンアップされる。
+ファイルリダイレクションでは、シェルは完了時に `/tmp/xyz` を削除するよう気を付けなければならない。
+
+Second, pipes can pass arbitrarily long streams of data, while file redirection requires
+enough free space on disk to store all the data.
+
+第二に、パイプは任意の長さのデータストリームを流せるが、
+ファイルリダイレクションではすべてのデータが収まるような空き容量がディスクに必要である。
+
+Third, pipes allow for parallel execution of pipeline stages,
+while the file approach requires the first program to finish before the second starts.
+
+第三に、パイプを使うとパイプラインステージを並列に実行できるが、
+ファイルによるアプローチでは最初のプログラムが完了してから2つめを開始する必要がある。
 
 ## File system
 
