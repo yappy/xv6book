@@ -14,7 +14,7 @@ OS は低レベルのハードウェアを管理し抽象化する。
 その結果、例えば、ワープロ (注: 通じるのか？) はどのタイプのディスクハードウェアが
 使用されているか気にする必要がない。
 (注: ファイルを開いて読み書きする、という OS の機能を呼び出せば、HDD だろうが
-SSD だろうが USB メモリだろうが共通のやり方でデータを読み書きできる)
+SSD だろうが USB メモリだろうが共通のやり方でデータを読み書きできる、ということ。)
 
 An operating system shares the hardware among multiple programs
 so that they run (or appear to run) at the same time.
@@ -24,7 +24,7 @@ OS はハードウェアを複数のプログラム間に分け与える。
 (注: 昔はシングルコアで同時に1つのプログラムしか動かなかったため、時々動作中の
 プログラムを切り替えることによって同時実行しているように見せかけていたが、
 最近のマルチコアシステムではコア数までなら本当に物理的に同時に動く。
-それ以上の数に対しては切り替えを行うが。)
+それ以上の数に対しては切り替えを行う。)
 
 Finally, operating systems provide controlled ways for programs to interact,
 so that they can share data or work together.
@@ -651,78 +651,228 @@ close システムコールはファイルディスクリプタを解放し、�
 
 A newly allocated file descriptor is always the lowest-numbered unused descriptor of the current process.
 
+新たに確保されるファイルディスクリプタは、現在のプロセスの中で使われていない番号のうち
+常に一番小さいものとなる。
+
 File descriptors and fork interact to make I/O redirection easy to implement.
+
+ファイルディスクリプタと fork の組み合わせは I/O リダイレクションを実装しやすいものとする。
 
 fork copies the parent’s file descriptor table along with its memory,
 so that the child starts with exactly the same open files as the parent.
 
+fork が親のファイルディスクリプタテーブルをメモリ内にコピーすることで、
+子は親と完全に同じファイル群をオープンしている状態で開始する。
+
 The system call exec replaces the calling process’s memory but preserves its file table.
+
+exec システムコールは呼んだプロセスのメモリを置き換えるが、ファイルテーブルは
+そのまま保持する。
+
 This behavior allows the shell to implement I/O redirection by forking,
 reopening chosen file descriptors in the child, and then calling exec to run the new program.
+
+この挙動によりシェルは I/O リダイレクションを実装できる。
+fork し、選択されたファイルディスクリプタを子プロセス内で reopen し、
+exec を呼んで新しいプログラムを実行すればよい。
+
 Here is a simplified version of the code a shell runs for the command cat < input.txt:
+
+以下がシェルがコマンド `cat < input.txt` を実行する簡略化バージョンのコードである。
 
 ```C
 char *argv[2];
+
 argv[0] = "cat";
 argv[1] = 0;
 if(fork() == 0) {
-close(0);
-open("input.txt", O_RDONLY);
-exec("cat", argv);
+  close(0);
+  open("input.txt", O_RDONLY);
+  exec("cat", argv);
 }
 ```
 
-After the child closes file descriptor 0, open is guaranteed to use that file descriptor for the newly
-opened input.txt: 0 will be the smallest available file descriptor. cat then executes with file
-descriptor 0 (standard input) referring to input.txt. The parent process’s file descriptors are not
-changed by this sequence, since it modifies only the child’s descriptors.
-The code for I/O redirection in the xv6 shell works in exactly this way (user/sh.c:83). Recall that
-at this point in the code the shell has already forked the child shell and that runcmd will call exec
-to load the new program.
-The second argument to open consists of a set of flags, expressed as bits, that control what
-open does. The possible values are defined in the file control (fcntl) header (kernel/fcntl.h:1-5):
-14
+After the child closes file descriptor 0, open is guaranteed to use
+that file descriptor for the newly opened input.txt:
+0 will be the smallest available file descriptor.
+
+子がファイルディスクリプタ 0 を close した後の open は、
+そのファイルディスクリプタ (0) を新たに open される input.txt に使うことが保証される。
+
+cat then executes with file descriptor 0 (standard input) referring to input.txt.
+
+cat はファイルディスクリプタ 0 (標準入力) が input.txt を指した状態で実行される。
+
+The parent process’s file descriptors are not changed by this sequence,
+since it modifies only the child’s descriptors.
+
+親プロセスのファイルディスクリプタはこの処理の流れでは変更されない。
+子のディスクリプタを変更するのみだからである。
+
+The code for I/O redirection in the xv6 shell works in exactly this way (user/sh.c:83).
+
+vx6 シェルの I/O リダイレクションのコードはまさにこの方法で動く(`user/sh.c:83)。
+
+Recall that at this point in the code the shell has already forked the child shell and
+that runcmd will call exec to load the new program.
+
+コード内のこの時点でシェルは既に子を fork 完了していることと、
+runcmd 関数は新しいプログラムをロードするためにこれから exec を呼ぶことを思い出そう。
+
+The second argument to open consists of a set of flags, expressed as bits,
+that control what open does.
+
+open への2つ目の引数は、open が何をするかを制御するためのビットフラグのセットである。
+
+The possible values are defined in the file control (fcntl) header (kernel/fcntl.h:1-5):
 O_RDONLY, O_WRONLY, O_RDWR, O_CREATE, and O_TRUNC, which instruct open to open the file
 for reading, or for writing, or for both reading and writing, to create the file if it doesn’t exist, and
 to truncate the file to zero length.
-Now it should be clear why it is helpful that fork and exec are separate calls: between the
-two, the shell has a chance to redirect the child’s I/O without disturbing the I/O setup of the main
-shell. One could instead imagine a hypothetical combined forkexec system call, but the options
-for doing I/O redirection with such a call seem awkward. The shell could modify its own I/O
-setup before calling forkexec (and then un-do those modifications); or forkexec could take
-instructions for I/O redirection as arguments; or (least attractively) every program like cat could
-be taught to do its own I/O redirection.
-Although fork copies the file descriptor table, each underlying file offset is shared between
-parent and child. Consider this example:
+
+指定可能な値は file control (fctrl) ヘッダ (`kernel/fcntl.h:1-5`) で定義されている。
+O_RDONLY, O_WRONLY, O_RDWR, O_CREATE, O_TRUNC は open にそれぞれ
+読み取り用、書き込み用、読み書き両用、ファイルが存在しなければ作成する、
+ファイルを長さ 0 まで切り詰める、ということを指示する。
+
+Now it should be clear why it is helpful that fork and exec are separate calls:
+between the two, the shell has a chance to redirect the child’s I/O
+without disturbing the I/O setup of the main shell.
+
+これで fork と exec の呼び出しが分かれているのが役に立つ理由が明らかになったはずだ。
+この2つの呼び出しの間で、シェルは親の I/O 設定を乱すことなく
+子の I/O をリダイレクトする機会を得ることができる。
+
+One could instead imagine a hypothetical combined forkexec system call,
+but the options for doing I/O redirection with such a call seem awkward.
+
+代わりに機能を合体させた forkexec システムコールを仮に考える者がいるかもしれないが、
+その呼び出しに伴う I/O リダイレクションを行うためのオプションは不格好なものになるだろう。
+(注: そういえば Windows の CreateProcess API の引数は見た目がまあまあひどいです。
+直接そのことを言っているのかは不明。)
+
+The shell could modify its own I/O setup before calling forkexec (and then un-do those modifications);
+or forkexec could take instructions for I/O redirection as arguments;
+or (least attractively) every program like cat could be taught to do its own I/O redirection.
+
+シェルは forkexec を呼ぶ前に I/O 設定を変更する (そして呼出し後、変更を元に戻す) か、
+forkexec が I/O リダイレクションの指定を引数として取るか、
+(これは最も魅力的でないが) cat のようなそれぞれすべてのプログラムが
+リダイレクトを自分で行うよう指示される、というような方法があり得るだろう。
+
+Although fork copies the file descriptor table, each underlying file offset is shared between parent and child.
+
+fork はファイルディスクリプタテーブルをコピーするが、
+それぞれの内部にあるファイルオフセットは親と子の間で共有される。
+
+Consider this example:
+
+以下の例を考えよう
+
+```C
 if(fork() == 0) {
-write(1, "hello ", 6);
-exit(0);
+  write(1, "hello ", 6);
+  exit(0);
 } else {
-wait(0);
-write(1, "world\n", 6);
+  wait(0);
+  write(1, "world\n", 6);
 }
+```
+
 At the end of this fragment, the file attached to file descriptor 1 will contain the data hello world.
-The write in the parent (which, thanks to wait, runs only after the child is done) picks up where
-the child’s write left off. This behavior helps produce sequential output from sequences of shell
-commands, like (echo hello; echo world) >output.txt.
-The dup system call duplicates an existing file descriptor, returning a new one that refers to
-the same underlying I/O object. Both file descriptors share an offset, just as the file descriptors
-duplicated by fork do. This is another way to write hello world into a file:
+
+このコードの実行後、ファイルディスクリプタ 1 に関連付けられたファイルの中身は
+"hello world" という内容になるだろう。
+
+The write in the parent (which, thanks to wait, runs only after the child is done)
+picks up where the child’s write left off.
+
+親の write は (これは wait のおかげで子が完了した後にのみ実行される)、
+子の write が終わった場所から行われる。
+
+This behavior helps produce sequential output from sequences of shell commands,
+like (echo hello; echo world) >output.txt.
+
+この挙動は連続した出力を連続したシェルコマンドから生成するのに役立つ。
+例えば `(echo hello; echo world) >output.txt` のようなもの。
+
+The dup system call duplicates an existing file descriptor,
+returning a new one that refers to the same underlying I/O object.
+
+dup システムコールは既存のファイルディスクリプタを複製する(duplicate)。
+
+Both file descriptors share an offset, just as the file descriptors
+duplicated by fork do.
+
+両方のファイルディスクリプタは、ちょうど fork で複製されたファイルディスクリプタと同じように、
+オフセットを共有する。
+
+This is another way to write hello world into a file:
+
+以下は "hello world" をファイルに書き込むもう1つの方法である。
+
+```C
 fd = dup(1);
 write(1, "hello ", 6);
 write(fd, "world\n", 6);
-Two file descriptors share an offset if they were derived from the same original file descriptor
-by a sequence of fork and dup calls. Otherwise file descriptors do not share offsets, even if they
-resulted from open calls for the same file. dup allows shells to implement commands like this:
-ls existing-file non-existing-file > tmp1 2>&1. The 2>&1 tells the shell to give the
-command a file descriptor 2 that is a duplicate of descriptor 1. Both the name of the existing file
-and the error message for the non-existing file will show up in the file tmp1. The xv6 shell doesn’t
-support I/O redirection for the error file descriptor, but now you know how to implement it.
-File descriptors are a powerful abstraction, because they hide the details of what they are con-
-nected to: a process writing to file descriptor 1 may be writing to a file, to a device like the console,
-or to a pipe.
+```
 
-##  Pipes
+Two file descriptors share an offset if they were derived from the same original file descriptor
+by a sequence of fork and dup calls.
+
+2つのファイルディスクリプタが、fork と dup の一連の呼び出しによって
+同じオリジナルのファイルディスクリプタから作られた場合、
+それらは1つのオフセットを共有する。
+
+Otherwise file descriptors do not share offsets,
+even if they resulted from open calls for the same file.
+
+それ以外の場合、ファイルディスクリプタはオフセットを共有しない。
+たとえ open を同じファイルに対して呼び出したとしてもである。
+
+dup allows shells to implement commands like this:
+ls existing-file non-existing-file > tmp1 2>&1.
+
+dup はシェルでの以下のようなコマンドを可能にする。
+`ls existing-file non-existing-file > tmp1 2>&1.`
+
+The 2>&1 tells the shell to give the command a file descriptor 2
+that is a duplicate of descriptor 1.
+
+この `2>&1` はシェルに、そのコマンド (ls) に対して
+ファイルディスクリプタ 1 を複製したものである ファイルディスクリプタ 2 を渡すよう指示している。
+(注: close(2) して dup(1) すれば空いている最小番号である fd 2 が 1 の複製となる。
+その前に `> tmp1` で close(1) の後 open("tmp1") により stdout=1 はファイルに
+リダイレクトされているため、最終的に stderr=2 もファイルへ向くことになる。)
+
+Both the name of the existing file and the error message for the non-existing file
+will show up in the file tmp1.
+
+存在するファイル名と、存在しないファイル名に対するエラーメッセージの両方が
+tmp1 というファイルの中に現れることになるだろう。
+(注: 存在するファイル名と存在しないファイル名の両方を渡された ls コマンドは
+stdout=1 に正常な処理結果を、stderr=2 にエラーメッセージを出力するが、
+`> tmp1` で stdout は `tmp1` というファイルにリダイレクトされており、
+`2>&1` で stderr も同じ `tmp1` に出力されることになる。)
+
+The xv6 shell doesn’t support I/O redirection for the error file descriptor,
+but now you know how to implement it.
+
+xv6 シェルは標準エラー出力の I/O リダイレクションはサポートしていないが、
+今やその実装の仕方は分かったはずだ。
+(注: わざとそのような余地を残しており、おそらく演習課題となる。)
+
+File descriptors are a powerful abstraction,
+because they hide the details of what they are connected to:
+a process writing to file descriptor 1 may be writing to a file,
+to a device like the console, or to a pipe.
+
+ファイルディスクリプタは強力な抽象である。
+それが具体的に何につながっているかの詳細を隠すからである。
+あるプロセスがファイルディスクリプタ 1 に書いている時、
+ファイルに書いているかもしれないし、コンソールのようなデバイスに書いているかもしれないし、
+パイプに書いているかもしれない。
+
+## Pipes
 
 A pipe is a small kernel buffer exposed to processes as a pair of file descriptors, one for reading
 and one for writing. Writing data to one end of the pipe makes that data available for reading from
