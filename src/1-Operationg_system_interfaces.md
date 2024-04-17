@@ -291,7 +291,7 @@ if(pid > 0){
   printf("child: exiting\n");
   exit(0);
 } else {
- printf("fork error\n");
+  printf("fork error\n");
 }
 ```
 
@@ -325,6 +325,8 @@ If the parent doesn’t care about the exit status of a child, it can pass a 0 a
 
 In the example, the output lines
 
+この例では、出力行は
+
 ```text
 parent: child=1234
 child: exiting
@@ -333,109 +335,333 @@ child: exiting
 might come out in either order (or even intermixed),
 depending on whether the parent or child gets to its printf call first.
 
+親と子のどちらが先に printf を呼ぶかに依存して、
+どちらの順番にもなる可能性がある (または混ざるかもしれない)
+
 After the child exits, the parent’s wait returns, causing the parent to print
+
+子が終了した後、親の wait がリターンし、親は以下を出力する。
 
 ```text
 parent: child 1234 is done
 ```
 
-Although the child has the same memory contents as the parent initially, the parent and child are
-executing with separate memory and separate registers: changing a variable in one does not affect
-the other. For example, when the return value of wait is stored into pid in the parent process, it
-doesn’t change the variable pid in the child. The value of pid in the child will still be zero.
-The exec system call replaces the calling process’s memory with a new memory image loaded
-from a file stored in the file system. The file must have a particular format, which specifies which
-part of the file holds instructions, which part is data, at which instruction to start, etc. Xv6 uses the
-ELF format, which Chapter 3 discusses in more detail. Usually the file is the result of compiling
-a program’s source code. When exec succeeds, it does not return to the calling program; instead,
+Although the child has the same memory contents as the parent initially,
+the parent and child are executing with separate memory and separate registers:
+changing a variable in one does not affect the other.
+
+子は最初は親と同じメモリ内容を持つが、親と子は別々のメモリと別々のレジスタで実行される。
+片方で変数を書き換えても、それはもう片方に影響を与えない。
+
+For example, when the return value of wait is stored into pid in the parent process,
+it doesn’t change the variable pid in the child.
+
+例えば、wait の返り値が親プロセス内で pid に格納された時、
+これは子プロセス内の pid 変数を変更する訳ではない。
+
+The value of pid in the child will still be zero.
+
+子プロセス内の pid はゼロのままとなる。
+
+The exec system call replaces the calling process’s memory with a new memory image
+loaded from a file stored in the file system.
+
+exec システムコールは呼んだプロセスのメモリをファイルシステムに保存されている
+ファイルからロードした新しいメモリイメージで置き換える。
+
+The file must have a particular format, which specifies
+which part of the file holds instructions,
+which part is data, at which instruction to start, etc.
+
+そのファイルは特定の形式である必要がある。
+そのフォーマットでは以下が明記される。
+そのファイルのどの部分が命令を保持しているか、
+どの部分がデータなのか、どの命令からプログラムが開始するのか、等。
+
+Xv6 uses the ELF format, which Chapter 3 discusses in more detail.
+
+xv6 は ELF フォーマットを使う。これは3章でより詳しく議論する。
+
+Usually the file is the result of compiling a program’s source code.
+
+通常、この ELF ファイルはプログラムのソースコードをコンパイルした結果として得られる。
+
+When exec succeeds, it does not return to the calling program; instead,
 the instructions loaded from the file start executing at the entry point declared in the ELF header.
-exec takes two arguments: the name of the file containing the executable and an array of string
-arguments. For example:
+
+exec が成功した時、呼び出したプログラムへは返らない。
+代わりに、ELF からロードされた命令列が、ELF ヘッダで宣言されたエントリポイントから
+実行を開始する。
+
+exec takes two arguments: the name of the file containing the executable and
+an array of string arguments.
+
+exec は2つの引数を取る。
+実行可能データを含むファイル名と、文字列引数の配列である。
+(注: 要はコマンド名と、コマンドラインパラメータ)
+
+For example:
+
+例えば、
+
+```C
 char *argv[3];
 argv[0] = "echo";
 argv[1] = "hello";
 argv[2] = 0;
 exec("/bin/echo", argv);
 printf("exec error\n");
+```
+
 This fragment replaces the calling program with an instance of the program /bin/echo running
-with the argument list echo hello. Most programs ignore the first element of the argument array,
+with the argument list echo hello.
+
+このコード片は exec を呼んでいるプログラムを、引数リスト `echo hello` で実行している
+`/bin/echo` プログラムのインスタンスに置き換える。
+
+Most programs ignore the first element of the argument array,
 which is conventionally the name of the program.
-The xv6 shell uses the above calls to run programs on behalf of users. The main structure of
-the shell is simple; see main (user/sh.c:146). The main loop reads a line of input from the user with
-getcmd. Then it calls fork, which creates a copy of the shell process. The parent calls wait,
-while the child runs the command. For example, if the user had typed “echo hello” to the shell,
-runcmd would have been called with “echo hello” as the argument. runcmd (user/sh.c:55) runs
-the actual command. For “echo hello”, it would call exec (user/sh.c:79). If exec succeeds then
-the child will execute instructions from echo instead of runcmd. At some point echo will call
-exit, which will cause the parent to return from wait in main (user/sh.c:146).
-12
-You might wonder why fork and exec are not combined in a single call; we will see later that
-the shell exploits the separation in its implementation of I/O redirection. To avoid the wastefulness
-of creating a duplicate process and then immediately replacing it (with exec), operating kernels
-optimize the implementation of fork for this use case by using virtual memory techniques such
-as copy-on-write (see Section 4.6).
-Xv6 allocates most user-space memory implicitly: fork allocates the memory required for the
-child’s copy of the parent’s memory, and exec allocates enough memory to hold the executable
-file. A process that needs more memory at run-time (perhaps for malloc) can call sbrk(n) to
+
+ほとんどのプログラムは引数配列の最初の要素を無視する。
+これはプログラム名とするのが慣例である。
+(注: `argv[0]`)
+
+The xv6 shell uses the above calls to run programs on behalf of users.
+
+xv6 シェルは上記のシステムコールを、ユーザの代わりにプログラムを実行するために使用する。
+(注: ユーザというのは人間のこと。ユーザランドプログラムのことではない。)
+
+The main structure of the shell is simple; see main (user/sh.c:146).
+
+シェルのメイン構造はシンプルである。
+main 関数を参照。`user/sh.c:146`
+
+The main loop reads a line of input from the user with getcmd.
+
+メインループは getcmd でユーザからの入力を1行読み取る。
+
+Then it calls fork, which creates a copy of the shell process.
+
+そして fork を呼び出し、fork はシェルプロセスのコピーを生成する。
+
+The parent calls wait, while the child runs the command.
+
+親は wait を呼び出し、その間に子はコマンドを実行する。
+
+For example, if the user had typed “echo hello” to the shell,
+runcmd would have been called with “echo hello” as the argument.
+
+例えば、ユーザが "echo hello" とシェルにタイプしたとすると、
+runcmd 関数が "echo hello" を引数として呼ばれることになる。
+
+runcmd (user/sh.c:55) runs the actual command.
+
+runcmd は実際のコマンドを実行する。
+
+For “echo hello”, it would call exec (user/sh.c:79).
+
+"echo hello" に対して、runcmd は exec を呼ぶ。
+
+If exec succeeds then the child will execute instructions from echo instead of runcmd.
+
+もし exec が成功したら、子プロセスが echo プログラムからの命令列を runcmd の代わりに実行する。
+
+At some point echo will call exit, which will cause the parent to return from wait in main (user/sh.c:146).
+
+あるところで echo は exit システムコールを呼び、
+これにより親プロセスの main 関数内で wait が返ることになる。
+
+You might wonder why fork and exec are not combined in a single call;
+we will see later that the shell exploits the separation in its implementation of I/O redirection.
+
+なぜ fork と exec は1つの呼び出しにまとめられていないのかと疑問に思うかもしれない。
+シェルが I/O リダイレクションの実装において、この2つに分かれているのをうまく使っている
+ところを後で見ていくことにする。
+
+To avoid the wastefulness of creating a duplicate process and then immediately replacing it (with exec),
+operating kernels optimize the implementation of fork for this use case
+by using virtual memory techniques such as copy-on-write (see Section 4.6).
+
+プロセスを複製してすぐに (exec で) 置き換えるという無駄を回避するため、
+カーネルはコピーオンライトのような仮想メモリ技術を使ってこのユースケースのための
+fork 実装を最適化している。
+
+Xv6 allocates most user-space memory implicitly:
+fork allocates the memory required for the child’s copy of the parent’s memory,
+and exec allocates enough memory to hold the executable file.
+
+xv6 はほとんどのユーザ空間メモリを暗黙のうちに確保する。
+fork は親のメモリのコピーに必要な子のためのメモリを確保し、
+exec は実行可能ファイルを置くのに十分な量のメモリを確保する。
+
+A process that needs more memory at run-time (perhaps for malloc) can call sbrk(n) to
 grow its data memory by n bytes; sbrk returns the location of the new memory.
+
+実行時にもっとたくさんのメモリが必要になった (おそらく malloc のため) プロセスは、
+sbrk(n) システムコールを呼び出してデータメモリを n バイト増やすことができる。
+sbrk は新しいメモリ位置を返す。
 
 ## I/O and File descriptors
 
-A file descriptor is a small integer representing a kernel-managed object that a process may read
-from or write to. A process may obtain a file descriptor by opening a file, directory, or device,
-or by creating a pipe, or by duplicating an existing descriptor. For simplicity we’ll often refer
-to the object a file descriptor refers to as a “file”; the file descriptor interface abstracts away the
-differences between files, pipes, and devices, making them all look like streams of bytes. We’ll
-refer to input and output as I/O.
-Internally, the xv6 kernel uses the file descriptor as an index into a per-process table, so that
-every process has a private space of file descriptors starting at zero. By convention, a process reads
-from file descriptor 0 (standard input), writes output to file descriptor 1 (standard output), and
-writes error messages to file descriptor 2 (standard error). As we will see, the shell exploits the
-convention to implement I/O redirection and pipelines. The shell ensures that it always has three
-file descriptors open (user/sh.c:152), which are by default file descriptors for the console.
-The read and write system calls read bytes from and write bytes to open files named by file
-descriptors. The call read(fd, buf, n) reads at most n bytes from the file descriptor fd, copies
-them into buf, and returns the number of bytes read. Each file descriptor that refers to a file has an
-offset associated with it. read reads data from the current file offset and then advances that offset
-by the number of bytes read: a subsequent read will return the bytes following the ones returned
-by the first read. When there are no more bytes to read, read returns zero to indicate the end of
-the file.
-The call write(fd, buf, n) writes n bytes from buf to the file descriptor fd and returns the
-number of bytes written. Fewer than n bytes are written only when an error occurs. Like read,
-write writes data at the current file offset and then advances that offset by the number of bytes
-written: each write picks up where the previous one left off.
-The following program fragment (which forms the essence of the program cat) copies data
-from its standard input to its standard output. If an error occurs, it writes a message to the standard
-error.
+A file descriptor is a small integer representing a kernel-managed object
+that a process may read from or write to.
+
+ファイルディスクリプタはプロセスが読んだり書いたりできるカーネル管理のオブジェクトを
+表す小さな整数である。
+
+A process may obtain a file descriptor by opening a file, directory, or device,
+or by creating a pipe, or by duplicating an existing descriptor.
+
+プロセスはファイル、ディレクトリ、デバイスをオープンする、
+パイプを作成する、既存のディスクリプタを複製することによって
+ファイルティスクリプタを手に入れることができる。
+
+For simplicity we’ll often refer to the object a file descriptor refers to as a “file”;
+the file descriptor interface abstracts away the differences between files, pipes, and devices,
+making them all look like streams of bytes.
+
+簡単のため、ファイルディスクリプタが指すオブジェクトのことを "ファイル" と呼ぶことがしばしばある。
+ファイルディスクリプタインタフェースはファイル、パイプ、デバイスの違いを隠して抽象化し、
+すべてをバイトストリームのように見せる。
+
+We’ll refer to input and output as I/O.
+
+Input と Output (入出力) のことを I/O と呼ぶ。
+
+Internally, the xv6 kernel uses the file descriptor as an index into a per-process table,
+so that every process has a private space of file descriptors starting at zero.
+
+内部的には、xv6 カーネルはファイルディスクリプタをプロセスごとのテーブルのインデックスとして
+使用するため、すべてのプロセスはゼロから始まるファイルディスクリプタ空間を持つことになる。
+
+By convention, a process reads from file descriptor 0 (standard input),
+writes output to file descriptor 1 (standard output),
+and writes error messages to file descriptor 2 (standard error).
+
+慣例として、プロセスはファイルディスクリプタ 0 (標準入力) から読み取り、
+出力をファイルディスクリプタ 1 (標準出力) に書き込み、
+エラーメッセージをファイルディスクリプタ 2 (標準エラー出力) に書き込む。
+
+As we will see, the shell exploits the convention to implement I/O redirection and pipelines.
+
+これから見ていくように、シェルはこの慣例をうまく使って I/O リダイレクションや
+パイプを実装する。
+
+The shell ensures that it always has three file descriptors open (user/sh.c:152),
+which are by default file descriptors for the console.
+
+シェルは常に 3 つのファイルディスクリプタが開いていることを保証する。
+これはデフォルトではコンソール用のファイルディスクリプタである。
+
+The read and write system calls read bytes from and write bytes to open files named by file descriptors.
+
+read と write システムコールはファイルディスクリプタによって指定された
+開かれているファイルに対してバイト列を読んだり書いたりする。
+
+The call read(fd, buf, n) reads at most n bytes from the file descriptor fd,
+copies them into buf, and returns the number of bytes read.
+
+`read(fd, buf, n)` 呼び出しは最大で n バイトをファイルディスクリプタ fd から読み取り、
+buf へコピーし、読んだバイト数を返す。
+
+Each file descriptor that refers to a file has an offset associated with it.
+
+ファイルを参照しているそれぞれのファイルディスクリプタはそれに関連付けられたオフセットを持つ。
+
+read reads data from the current file offset and then advances that offset
+by the number of bytes read:
+a subsequent read will return the bytes following the ones returned by the first read.
+
+read は現在のファイルオフセットからデータを読み、読んだバイト数だけそのオフセットを進める。
+次の read は最初の read が返したバイト列の次のバイト列を返すことになる。
+
+When there are no more bytes to read, read returns zero to indicate the end of the file.
+
+これ以上読むバイトがない場合は、read はファイルの終わり (EOF = end of file) を示すために
+ゼロを返す。
+
+The call write(fd, buf, n) writes n bytes from buf to the file descriptor fd
+and returns the number of bytes written.
+
+`write(fd, buf, n)` 呼び出しは n バイトを buf からファイルディスクリプタ fd に書き込み、
+書き込んだバイト数を返す。
+
+Fewer than n bytes are written only when an error occurs.
+
+エラーが発生した場合のみ、n より小さいバイト数が書き込まれる。
+
+Like read, write writes data at the current file offset and then advances that offset
+by the number of bytes written:
+each write picks up where the previous one left off.
+
+read のように、write は現在のファイルオフセットにデータを書き込み、
+そのオフセットを書き込んだバイト数だけ進める。
+
+The following program fragment (which forms the essence of the program cat)
+copies data from its standard input to its standard output.
+
+次のプログラム片 (これは cat プログラムの主要な要素をなす) は標準入力からのデータを
+標準出力にコピーする。
+
+If an error occurs, it writes a message to the standard error.
+
+エラーが発生した場合、メッセージを標準エラー出力に書き込む。
+
+```C
 char buf[512];
 int n;
+
 for(;;){
-13
-n = read(0, buf, sizeof buf);
-if(n == 0)
-break;
-if(n < 0){
-fprintf(2, "read error\n");
-exit(1);
+  13
+  n = read(0, buf, sizeof buf);
+  if(n == 0)
+    break;
+  if(n < 0){
+    fprintf(2, "read error\n");
+    exit(1);
+  }
+  if(write(1, buf, n) != n){
+    fprintf(2, "write error\n");
+    exit(1);
+  }
 }
-if(write(1, buf, n) != n){
-fprintf(2, "write error\n");
-exit(1);
-}
-}
-The important thing to note in the code fragment is that cat doesn’t know whether it is reading
-from a file, console, or a pipe. Similarly cat doesn’t know whether it is printing to a console, a
-file, or whatever. The use of file descriptors and the convention that file descriptor 0 is input and
+```
+
+The important thing to note in the code fragment is
+that cat doesn’t know whether it is reading from a file, console, or a pipe.
+
+このコードの中で特筆すべき点は、cat はファイルから読んでいるのか、コンソールからなのか、
+パイプからなのか、を知らないということである。
+
+Similarly cat doesn’t know whether it is printing to a console, a file, or whatever.
+
+同様に、cat はコンソールに出力しているのか、ファイルになのか、他の何かになのかを知らないのである。
+
+The use of file descriptors and the convention that file descriptor 0 is input and
 file descriptor 1 is output allows a simple implementation of cat.
+
+ファイルディスクリプタの使用とファイルディスクリプタ 0 が入力で 1 が出力という慣例によって
+cat をシンプルに実装することができる。
+
 The close system call releases a file descriptor, making it free for reuse by a future open,
-pipe, or dup system call (see below). A newly allocated file descriptor is always the lowest-
-numbered unused descriptor of the current process.
-File descriptors and fork interact to make I/O redirection easy to implement. fork copies
-the parent’s file descriptor table along with its memory, so that the child starts with exactly the
-same open files as the parent. The system call exec replaces the calling process’s memory but
-preserves its file table. This behavior allows the shell to implement I/O redirection by forking, re-
-opening chosen file descriptors in the child, and then calling exec to run the new program. Here
-is a simplified version of the code a shell runs for the command cat < input.txt:
+pipe, or dup system call (see below).
+
+close システムコールはファイルディスクリプタを解放し、将来の open, pipe, dup
+システムコールで再利用できるできるようにする。(下記参照)
+
+A newly allocated file descriptor is always the lowest-numbered unused descriptor of the current process.
+
+File descriptors and fork interact to make I/O redirection easy to implement.
+
+fork copies the parent’s file descriptor table along with its memory,
+so that the child starts with exactly the same open files as the parent.
+
+The system call exec replaces the calling process’s memory but preserves its file table.
+This behavior allows the shell to implement I/O redirection by forking,
+reopening chosen file descriptors in the child, and then calling exec to run the new program.
+Here is a simplified version of the code a shell runs for the command cat < input.txt:
+
+```C
 char *argv[2];
 argv[0] = "cat";
 argv[1] = 0;
@@ -444,6 +670,8 @@ close(0);
 open("input.txt", O_RDONLY);
 exec("cat", argv);
 }
+```
+
 After the child closes file descriptor 0, open is guaranteed to use that file descriptor for the newly
 opened input.txt: 0 will be the smallest available file descriptor. cat then executes with file
 descriptor 0 (standard input) referring to input.txt. The parent process’s file descriptors are not
