@@ -1,91 +1,344 @@
 # Operating system interfaces
 
 The job of an operating system is to share a computer among multiple programs and to provide a
-more useful set of services than the hardware alone supports. An operating system manages and
-abstracts the low-level hardware, so that, for example, a word processor need not concern itself
-with which type of disk hardware is being used. An operating system shares the hardware among
-multiple programs so that they run (or appear to run) at the same time. Finally, operating systems
-provide controlled ways for programs to interact, so that they can share data or work together.
-An operating system provides services to user programs through an interface. Designing a good
-interface turns out to be difficult. On the one hand, we would like the interface to be simple and
-narrow because that makes it easier to get the implementation right. On the other hand, we may be
-tempted to offer many sophisticated features to applications. The trick in resolving this tension is to
-design interfaces that rely on a few mechanisms that can be combined to provide much generality.
+more useful set of services than the hardware alone supports.
+
+OS の仕事は一台のコンピュータを複数のプログラム間に分け与えることと、
+ハードウェア単体がサポートするよりも便利なサービスのセットを提供することである。
+
+An operating system manages and abstracts the low-level hardware,
+so that, for example, a word processor need not concern itself
+with which type of disk hardware is being used.
+
+OS は低レベルのハードウェアを管理し抽象化する。
+その結果、例えば、ワープロ (注: 通じるのか？) はどのタイプのディスクハードウェアが
+使用されているか気にする必要がない。
+(注: ファイルを開いて読み書きする、という OS の機能を呼び出せば、HDD だろうが
+SSD だろうが USB メモリだろうが共通のやり方でデータを読み書きできる)
+
+An operating system shares the hardware among multiple programs
+so that they run (or appear to run) at the same time.
+
+複数のプログラムが同時に実行される (または同時に実行されているように見える) ために
+OS はハードウェアを複数のプログラム間に分け与える。
+(注: 昔はシングルコアで同時に1つのプログラムしか動かなかったため、時々動作中の
+プログラムを切り替えることによって同時実行しているように見せかけていたが、
+最近のマルチコアシステムではコア数までなら本当に物理的に同時に動く。
+それ以上の数に対しては切り替えを行うが。)
+
+Finally, operating systems provide controlled ways for programs to interact,
+so that they can share data or work together.
+
+最後に、OS はプログラム同士が通信する方法を提供する。
+これにより、プログラムはデータを共有したり、協調して動いたりできる。
+
+An operating system provides services to user programs through an interface.
+
+OS はユーザプログラムに対してインタフェースを通してサービスを提供する。
+
+Designing a good interface turns out to be difficult.
+
+よいインタフェースを設計するのは難しい。
+
+On the one hand, we would like the interface to be simple and narrow
+because that makes it easier to get the implementation right.
+
+一方では、我々はインタフェースを単純で限定されたものにしたい。
+これは実装を正しいものにするのが簡単になるからだ(正しく実装するのが簡単になるからだ)。
+
+On the other hand, we may be tempted to offer many sophisticated features to applications.
+
+他方で、多くの高度な機能をアプリケーションに提供したいと思うかもしれない。
+
+The trick in resolving this tension is to design interfaces that rely on a few mechanisms
+that can be combined to provide much generality.
+
+この対立を解決するコツは、高い汎用性を提供するために組み合わせて使えるような、
+少数のメカニズムに基づいてインタフェースを設計することだ。
+(注: 単純なことのみを行うプログラムのみを用意し、それをパイプ等で組み合わせて使うことにより
+様々な状況に対応できるという UNIX 哲学のことを言っている。)
+
 This book uses a single operating system as a concrete example to illustrate operating system
-concepts. That operating system, xv6, provides the basic interfaces introduced by Ken Thompson
+concepts.
+
+本書では、OS の概念を説明するために、1つの OS を具体的な例として用いている。
+
+That operating system, xv6, provides the basic interfaces introduced by Ken Thompson
 and Dennis Ritchie’s Unix operating system [17], as well as mimicking Unix’s internal design.
+
+その OS、xv6 はケン・トンプソンとデニス・リッチーによって導入された基本的なインタフェースを提供し、
+Unix の内部設計を模倣している。
+
 Unix provides a narrow interface whose mechanisms combine well, offering a surprising degree
-of generality. This interface has been so successful that modern operating systems—BSD, Linux,
-macOS, Solaris, and even, to a lesser extent, Microsoft Windows—have Unix-like interfaces. Un-
-derstanding xv6 is a good start toward understanding any of these systems and many others.
+of generality.
+
+Unix はそのメカニズムがうまく組み合わされた限定的なインタフェースを提供し、
+驚くほどの汎用性を提供する。
+
+This interface has been so successful that modern operating systems—BSD, Linux,
+macOS, Solaris, and even, to a lesser extent, Microsoft Windows—have Unix-like interfaces.
+
+このインタフェースは大変成功していて、現代の OS - BSD, Linux, macOS, Solaris は、
+そしてやや程度は低くはなるが、Microsoft Windows でさえ、
+Unix ライクなインタフェースを持っている。
+
+Understanding xv6 is a good start toward understanding any of these systems and many others.
+
+xv6 を理解することは、これらの、またこれ以外の、あらゆるシステムを理解するための
+よいとっかかりとなるだろう。
+
+TODO: Figure 1.1
+
 As Figure 1.1 shows, xv6 takes the traditional form of a kernel, a special program that provides
-services to running programs. Each running program, called a process, has memory containing
-instructions, data, and a stack. The instructions implement the program’s computation. The data
-are the variables on which the computation acts. The stack organizes the program’s procedure calls.
+services to running programs.
+
+図1.1 に示すように、xv6 は伝統的なカーネルという形態を取っている。
+カーネルとは実行中のプログラムにサービスを提供する特別なプログラムである。
+
+Each running program, called a process, has memory containing instructions, data, and a stack.
+
+一つ一つの実行中のプログラムはプロセスと呼ばれ、命令、データ、スタックを含む
+メモリを持っている。
+
+The instructions implement the program’s computation.
+
+命令列はそのプログラムの計算を実現する。
+
+The data are the variables on which the computation acts.
+
+データはその計算が行われる変数群である。
+
+The stack organizes the program’s procedure calls.
+
+スタックはそのプログラムの手続き呼び出しを構成する。
+(注: 関数呼び出ししか分からなかったら関数呼び出しのことと思って OK です。)
+
 A given computer typically has many processes but only a single kernel.
-When a process needs to invoke a kernel service, it invokes a system call, one of the calls in
-the operating system’s interface. The system call enters the kernel; the kernel performs the service
-and returns. Thus a process alternates between executing in user space and kernel space.
-As described in detail in subsequent chapters, the kernel uses the hardware protection mech-
-anisms provided by a CPU1 to ensure that each process executing in user space can access only
-its own memory. The kernel executes with the hardware privileges required to implement these
-protections; user programs execute without those privileges. When a user program invokes a sys-
-tem call, the hardware raises the privilege level and starts executing a pre-arranged function in the
-kernel.
-The collection of system calls that a kernel provides is the interface that user programs see. The
-xv6 kernel provides a subset of the services and system calls that Unix kernels traditionally offer.
+
+一台のコンピュータでは典型的にはたくさんのプロセスが動いているが、
+カーネルは1つしかない。
+
+When a process needs to invoke a kernel service, it invokes a system call,
+one of the calls in the operating system’s interface.
+
+あるプロセスがカーネルのサービスを呼び出す必要が出てきたとき、
+そのプロセスはシステムコールを呼ぶ。
+システムコールとは OS 内のインタフェース呼び出しの1つである。
+
+The system call enters the kernel; the kernel performs the service and returns.
+
+システムコールはカーネルへ進入する。
+カーネルはサービスを実行し、そして戻る。
+
+Thus a process alternates between executing in user space and kernel space.
+
+このように、プロセスは実行中にユーザ空間とカーネル空間を行き来する。
+(注: 空間といった場合は通例メモリ空間のことを指す。下記参照。)
+
+As described in detail in subsequent chapters,
+the kernel uses the hardware protection mechanisms provided by a CPU(*1)
+to ensure that each process executing in user space can access only its own memory.
+
+続く章で詳しく解説するように、
+ユーザランドで実行中のそれぞれのプロセスが自分自身のメモリにしかアクセスできないことを保証するため、
+カーネルは CPU によって提供されるハードウェア保護機構を使用する。
+
+(*1) This text generally refers to the hardware element that executes a computation with the term CPU, an acronym
+
+The kernel executes with the hardware privileges required to implement these
+protections; user programs execute without those privileges.
+
+カーネルはこれらの保護を実現するためにハードウェア特権と共に実行される。
+ユーザプログラムはそのような特権なしで実行される。
+
+When a user program invokes a system call,
+the hardware raises the privilege level and starts executing
+a pre-arranged function in the kernel.
+
+ユーザプログラムがシステムコールを呼び出すと、
+ハードウェアは特権レベルを上げ、カーネル内のあらかじめ設定された関数を実行する。
+
+The collection of system calls that a kernel provides is the interface that user programs see.
+
+カーネルの提供するシステムコールのセットはユーザプログラムから見たインタフェースとなる。
+
+The xv6 kernel provides a subset of the services and system calls that Unix kernels traditionally offer.
+
+xv6 カーネルは Unix カーネルが伝統的に提供してきたサービスやシステムコールのサブセットを提供する。
+
 Figure 1.2 lists all of xv6’s system calls.
+
+図 1.2 に xv6 の全システムコールを示す。
+
+TODO: FIgure 1.2
+
 The rest of this chapter outlines xv6’s services—processes, memory, file descriptors, pipes,
 and a file system—and illustrates them with code snippets and discussions of how the shell, Unix’s
-command-line user interface, uses them. The shell’s use of system calls illustrates how carefully
-they have been designed.
-The shell is an ordinary program that reads commands from the user and executes them. The
-fact that the shell is a user program, and not part of the kernel, illustrates the power of the system
-call interface: there is nothing special about the shell. It also means that the shell is easy to replace;
-as a result, modern Unix systems have a variety of shells to choose from, each with its own user
-interface and scripting features. The xv6 shell is a simple implementation of the essence of the
-Unix Bourne shell. Its implementation can be found at (user/sh.c:1).
+command-line user interface, uses them.
+
+この章の残りでは、xv6 のサービス - プロセス、メモリ、ファイルディスクリプタ、パイプ、
+ファイルシステム - の概略を示し、それらをコード片、およびシェル
+(Unix のコマンドラインユーザインタフェース) がどのように使うかという考察で説明する。
+
+The shell’s use of system calls illustrates how carefully they have been designed.
+
+シェルからシステムコールがどのように使われるかは、
+システムコールがどのくらい注意深く設計されているかを物語る。
+(注: シェルからの OS の使い方を見れば OS の設計がどのくらい優れているかが
+わかるという哲学を主張している。暗に、Unix のコマンドラインを見れば
+Unix (のシステムコール)の設計がいかに優れているかが分かると言っている。)
+
+The shell is an ordinary program that reads commands from the user and executes them.
+
+シェルというのは、コマンドをユーザから読み込んで、それを実行するような普通のプログラムである。
+
+The fact that the shell is a user program, and not part of the kernel,
+illustrates the power of the system call interface:
+there is nothing special about the shell.
+
+シェルがユーザプログラムでありカーネル一部ではないという事実は、
+システムコールインタフェースの威力を示している:
+シェルに関して特別なことは何もない。
+
+It also means that the shell is easy to replace;
+as a result, modern Unix systems have a variety of shells to choose from,
+each with its own user interface and scripting features.
+
+これはまた、シェルを置き換えることが簡単であるということをも意味する。
+その結果、現代の Unix システムは多くの種類のシェルの中から選択できる。
+それぞれのシェルは独自のユーザインタフェースとスクリプト機能を有している。
+
+The xv6 shell is a simple implementation of the essence of the Unix Bourne shell.
+
+xv6 のシェルは Unix Bourne shell の要点をシンプルに実装したものになっている。
+(注: Unix の由緒正しい原初のシェル。Bourne は人名。
+/bin/sh はもともとこのシェルだったが、
+現代では後継のシェルへのシンボリックリンクになっていることが多い。)
+
+Its implementation can be found at (user/sh.c:1).
+
+その実装は xv6 ソースコードの user/sh.c にある。
 
 ## Processes and memory
 
-An xv6 process consists of user-space memory (instructions, data, and stack) and per-process state
-private to the kernel. Xv6 time-shares processes: it transparently switches the available CPUs
-among the set of processes waiting to execute. When a process is not executing, xv6 saves the
-process’s CPU registers, restoring them when it next runs the process. The kernel associates a
-process identifier, or PID, with each process.
-A process may create a new process using the fork system call. fork gives the new process
-an exact copy of the calling process’s memory, both instructions and data. fork returns in both
-the original and new processes. In the original process, fork returns the new process’s PID. In the
-new process, fork returns zero. The original and new processes are often called the parent and
-child.
+An xv6 process consists of user-space memory (instructions, data, and stack)
+and per-process state private to the kernel.
 
-For example, consider the following program fragment written in the C programming lan-
-guage [7]:
+xv6 のプロセスはユーザ空間メモリ (命令、データ、スタック) と、
+カーネルに対してプライベートなプロセスごとのステートからなる。
+
+Xv6 time-shares processes: it transparently switches the available CPUs
+among the set of processes waiting to execute.
+
+xv6 はプロセス群に時間を分け与える:
+実行待ちのプロセスセットの間で利用可能な CPU を透過的に切り替える。
+(注: time-sharing - OS における重要用語。
+CPU 時間というシステム全体で共通のリソースをプロセス間で分配するという概念。)
+(注: transparently - コンピュータ技術全般における重要用語。
+透過的に。外側のユーザから違いを意識させることなく使用できること。
+ここではユーザプログラムはただ自分の仕事のための命令列を実行するだけでよく、
+CPU のスイッチは OS 側で行うのでそれを意識する必要が全くないことを指す。)
+
+When a process is not executing, xv6 saves the process’s CPU registers,
+restoring them when it next runs the process.
+
+プロセスが実行中でない時、xv6 はそのプロセスの CPU レジスタをセーブしておき、
+次にそのプロセスを実行するときにそれを復元する。
+(注: save-restore - 退避・復元。ここではメモリを使う。)
+
+The kernel associates a process identifier, or PID, with each process.
+
+カーネルはそれぞれのプロセスに対して1つずつ、プロセス識別子
+(process identifier - PID) を割り当てる。
+
+A process may create a new process using the fork system call.
+
+プロセスは fork システムコールを使って新しいプロセスを生成することができる。
+
+fork gives the new process an exact copy of the calling process’s memory, both instructions and data.
+
+fork は呼び出し元のプロセスメモリ (命令とデータ両方) の完全なコピーである
+新しいプロセス与える。
+
+fork returns in both the original and new processes.
+
+fork はオリジナルと新しいプロセスの両方にリターンする。
+
+In the original process, fork returns the new process’s PID.
+
+オリジナルのプロセスでは、fork は新しいプロセスの PID を返す。
+
+In the new process, fork returns zero.
+
+新しいプロセスでは、fork はゼロを返す。
+
+The original and new processes are often called the parent and child.
+
+オリジナルと新しいプロセスはしばしば親と子と呼ばれる。
+
+For example, consider the following program fragment written
+in the C programming language [7]:
+
+例えば、以下の C 言語で書かれたプログラムを考えよう。
+
+```C
 int pid = fork();
 if(pid > 0){
-printf("parent: child=%d\n", pid);
-pid = wait((int *) 0);
-printf("child %d is done\n", pid);
+  printf("parent: child=%d\n", pid);
+  pid = wait((int *) 0);
+  printf("child %d is done\n", pid);
 } else if(pid == 0){
-printf("child: exiting\n");
-exit(0);
+  printf("child: exiting\n");
+  exit(0);
 } else {
-printf("fork error\n");
+ printf("fork error\n");
 }
-The exit system call causes the calling process to stop executing and to release resources such as
-memory and open files. Exit takes an integer status argument, conventionally 0 to indicate success
-and 1 to indicate failure. The wait system call returns the PID of an exited (or killed) child of
-11
-the current process and copies the exit status of the child to the address passed to wait; if none of
-the caller’s children has exited, wait waits for one to do so. If the caller has no children, wait
-immediately returns -1. If the parent doesn’t care about the exit status of a child, it can pass a 0
-address to wait.
+```
+
+The exit system call causes the calling process to stop executing and
+to release resources such as memory and open files.
+
+exit システムコールは呼んだプロセスの実行を停止し、メモリや開いているファイルのような
+リソースを解放する。
+
+Exit takes an integer status argument, conventionally 0 to indicate success
+and 1 to indicate failure.
+
+exit は 1 つの整数引数を取り、慣例的に 0 が成功を、1 が失敗を表す。
+
+The wait system call returns the PID of an exited (or killed) child of the current process and
+copies the exit status of the child to the address passed to wait;
+if none of the caller’s children has exited, wait waits for one to do so.
+
+wait システムコールは終了した (または kill された) 自分の子プロセス1つの PID を返し、
+wait に渡されたアドレスにその子プロセスの終了ステータスをコピーする。
+もし1つの子プロセスも終了していなかった場合、wait はどれか1つが終了するまで待つ。
+
+If the caller has no children, wait immediately returns -1.
+
+もし呼び出し側が子プロセスを持っていない場合、wait は直ちに -1 を返す。
+
+If the parent doesn’t care about the exit status of a child, it can pass a 0 address to wait.
+
+もし親が子の終了ステータスを気にしないならば、wait に 0 アドレスを渡すことができる。
+(注: ヌルポインタ)
+
 In the example, the output lines
+
+```text
 parent: child=1234
 child: exiting
-might come out in either order (or even intermixed), depending on whether the parent or child gets
-to its printf call first. After the child exits, the parent’s wait returns, causing the parent to print
+```
+
+might come out in either order (or even intermixed),
+depending on whether the parent or child gets to its printf call first.
+
+After the child exits, the parent’s wait returns, causing the parent to print
+
+```text
 parent: child 1234 is done
+```
+
 Although the child has the same memory contents as the parent initially, the parent and child are
 executing with separate memory and separate registers: changing a variable in one does not affect
 the other. For example, when the return value of wait is stored into pid in the parent process, it
