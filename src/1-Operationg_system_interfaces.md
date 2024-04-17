@@ -406,6 +406,7 @@ For example:
 
 ```C
 char *argv[3];
+
 argv[0] = "echo";
 argv[1] = "hello";
 argv[2] = 0;
@@ -612,7 +613,6 @@ char buf[512];
 int n;
 
 for(;;){
-  13
   n = read(0, buf, sizeof buf);
   if(n == 0)
     break;
