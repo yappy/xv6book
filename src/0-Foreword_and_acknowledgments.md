@@ -1,5 +1,7 @@
 # Foreword and acknowledgments
 
+まえがきと謝辞
+
 This is a draft text intended for a class on operating systems.
 
 これはオペレーティングシステムの授業を目的としたドラフトテキストである。
@@ -25,7 +27,7 @@ ANSI C で、マルチコア RISC-V 向けに、実装されている。
 This text should be read along with the source code for xv6, an approach inspired by John
 Lions’ Commentary on UNIX 6th Edition [11].
 
-このテキストは xv6 のソースコードと共に読み進めてほしい。
+本テキストは xv6 のソースコードと共に読み進めてほしい。
 これは "John Lions’ Commentary on UNIX 6th Edition" に触発されたアプローチである。
 (注: v6 の解説本だが、K&R 以前の古文 C であり、現代人にはまともに読めない。
 ~~なので古文の勉強は大切である。~~)
@@ -39,7 +41,7 @@ including several lab assignments using xv6.
 
 We have used this text in 6.828 and 6.1810, the operating system classes at MIT.
 
-我々はこのテキストを 6.828 および 6.1810 という MIT での
+我々は本テキストを 6.828 および 6.1810 という MIT での
 オペレーティングシステムの授業で使用した。
 
 We thank the faculty, teaching assistants, and students of those classes

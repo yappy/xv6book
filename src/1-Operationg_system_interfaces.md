@@ -1,5 +1,7 @@
 # Operating system interfaces
 
+オペレーティングシステムのインタフェース
+
 The job of an operating system is to share a computer among multiple programs and to provide a
 more useful set of services than the hardware alone supports.
 
@@ -220,6 +222,8 @@ Its implementation can be found at (user/sh.c:1).
 その実装は xv6 ソースコードの user/sh.c にある。
 
 ## Processes and memory
+
+プロセスとメモリ
 
 An xv6 process consists of user-space memory (instructions, data, and stack)
 and per-process state private to the kernel.
@@ -503,6 +507,8 @@ sbrk(n) システムコールを呼び出してデータメモリを n バイト
 sbrk は新しいメモリ位置を返す。
 
 ## I/O and File descriptors
+
+I/O とファイルディスクリプタ
 
 A file descriptor is a small integer representing a kernel-managed object
 that a process may read from or write to.
@@ -874,6 +880,8 @@ to a device like the console, or to a pipe.
 
 ## Pipes
 
+パイプ
+
 A pipe is a small kernel buffer exposed to processes as a pair of file descriptors,
 one for reading and one for writing.
 
@@ -1029,6 +1037,8 @@ while the file approach requires the first program to finish before the second s
 ファイルによるアプローチでは最初のプログラムが完了してから2つめを開始する必要がある。
 
 ## File system
+
+ファイルシステム
 
 The xv6 file system provides data files, which contain uninterpreted byte arrays, and directories,
 which contain named references to data files and other directories.
@@ -1375,7 +1385,7 @@ Unix 用語でいうと、すべての xv6 プロセスはルート (権限) と
 This book examines how xv6 implements its Unix-like interface,
 but the ideas and concepts apply to more than just Unix.
 
-この本は xv6 がどのようにして Unix ライクなインタフェースを実装しているかを
+本書では xv6 がどのようにして Unix ライクなインタフェースを実装しているかを
 見ていくが、アイデアと概念は Unix だけに限らずあてはまる。
 
 Any operating system must multiplex processes onto the underlying hardware,
