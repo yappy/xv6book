@@ -60,7 +60,7 @@ which is used by many Unix operating systems.
 
 そのようにする方法はたくさんあることが分かるが、本テキストではモノリシックカーネルを
 中心とした主流の設計方法に焦点を当てる。
-モノリシックカーネルは多くの Unix OS で使われている。
+モノリシックなカーネル設計は多くの Unix OS で使われている。
 
 This chapter also provides an overview of an xv6 process,
 which is the unit of isolation in xv6, and the creation of the first process when xv6 starts.
@@ -282,18 +282,56 @@ Unix インタフェースはリソースを抽象化する唯一の方法では
 とてもよい一つの方法であると証明されている。
 
 2.2 User mode, supervisor mode, and system calls
-Strong isolation requires a hard boundary between applications and the operating system. If the
-application makes a mistake, we don’t want the operating system to fail or other applications to
-22
-fail. Instead, the operating system should be able to clean up the failed application and continue
-running other applications. To achieve strong isolation, the operating system must arrange that
-applications cannot modify (or even read) the operating system’s data structures and instructions
-and that applications cannot access other processes’ memory.
-CPUs provide hardware support for strong isolation. For example, RISC-V has three modes
-in which the CPU can execute instructions: machine mode, supervisor mode, and user mode. In-
-structions executing in machine mode have full privilege; a CPU starts in machine mode. Machine
-mode is mostly intended for configuring a computer. Xv6 executes a few lines in machine mode
-and then changes to supervisor mode.
+
+ユーザモード、スーパーバイザモード、システムコール
+
+Strong isolation requires a hard boundary between applications and the operating system.
+
+強い分離のためにはアプリケーションとオペレーティングシステムの間に強い境界が必要である。
+
+If the application makes a mistake, we don’t want the operating system
+to fail or other applications to fail.
+
+アプリケーションが誤りを犯した場合、オペレーティングシステムに障害が起きてほしくないし、
+他のアプリケーションにも障害が起きてほしくない。
+
+Instead, the operating system should be able to clean up the failed application and
+continue running other applications.
+
+そうではなく、オペレーティングシステムは障害が発生したアプリケーションを綺麗に片付け、
+他のアプリケーションを実行し続けられるべきである。
+
+To achieve strong isolation, the operating system must arrange that
+applications cannot modify (or even read) the operating system’s data structures and instructions and
+that applications cannot access other processes’ memory.
+
+強い分離を達成するためには、オペレーティングシステムは
+アプリケーションがオペレーティングシステムのデータ構造や命令を変更(または読み取りも)
+できないように、また、他のプロセスのメモリにアクセスできないようにしなければならない。
+
+CPUs provide hardware support for strong isolation.
+
+CPU は強い分離のためのハードウェアサポートを提供する。
+
+For example, RISC-V has three modes in which the CPU can execute instructions:
+machine mode, supervisor mode, and user mode.
+
+例えば、RISC-V は CPU が命令を実行するのに使える3つのモードがある。
+マシンモード、スーパーバイザモード、ユーザモード。
+
+Instructions executing in machine mode have full privilege; a CPU starts in machine mode.
+
+マシンモードで実行される命令は全権限を持つ。
+CPU はマシンモードで開始する。
+
+Machine mode is mostly intended for configuring a computer.
+
+マシンモードは大まかに言ってコンピュータの設定を行うためのものである。
+
+Xv6 executes a few lines in machine mode and then changes to supervisor mode.
+
+xv6 はマシンモードで数行を実行し、その後スーパバイザモードへ変更する。
+
 In supervisor mode the CPU is allowed to execute privileged instructions: for example, en-
 abling and disabling interrupts, reading and writing the register that holds the address of a page
 table, etc. If an application in user mode attempts to execute a privileged instruction, then the CPU
