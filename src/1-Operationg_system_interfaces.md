@@ -24,7 +24,7 @@ OS はハードウェアを複数のプログラム間に分け与える。
 (注: 昔はシングルコアで同時に1つのプログラムしか動かなかったため、時々動作中の
 プログラムを切り替えることによって同時実行しているように見せかけていたが、
 最近のマルチコアシステムではコア数までなら本当に物理的に同時に動く。
-それ以上の数に対しては切り替えを行う。)
+しかしそれ以上の数に対してはやはり切り替えを行う。)
 
 Finally, operating systems provide controlled ways for programs to interact,
 so that they can share data or work together.
@@ -1264,39 +1264,141 @@ The parent’s (i.e., the shell’s) working directory would not change.
 
 ## Real world
 
-Unix’s combination of “standard” file descriptors, pipes, and convenient shell syntax for operations
-on them was a major advance in writing general-purpose reusable programs. The idea sparked a
-culture of “software tools” that was responsible for much of Unix’s power and popularity, and the
-shell was the first so-called “scripting language.” The Unix system call interface persists today in
-systems like BSD, Linux, and macOS.
+Unix’s combination of “standard” file descriptors, pipes,
+and convenient shell syntax for operations on them was a major advance
+in writing general-purpose reusable programs.
+
+Unix における「標準」ファイルディスクリプタ、パイプ、そしてそれらを操作するための
+便利なシェル構文という組み合わせは、汎用的で再利用可能なプログラムを書くという意味で
+大きな進歩だった。
+
+The idea sparked a culture of “software tools” that was responsible for
+much of Unix’s power and popularity, and the shell was the first so-called “scripting language.”
+
+このアイデアは Unix のパワーと人気の原動力となる「ソフトウェアツール」の文化に火をつけた。
+そしてシェルは初めての、いわゆる「スクリプト言語」だった。
+
+The Unix system call interface persists today in systems like BSD, Linux, and macOS.
+
+Unix システムコールインタフェースは今日においても BSD, Linux, macOS のようなシステム内で
+存続している。
+
 The Unix system call interface has been standardized through the Portable Operating System
-Interface (POSIX) standard. Xv6 is not POSIX compliant: it is missing many system calls (in-
-cluding basic ones such as lseek), and many of the system calls it does provide differ from the
-standard. Our main goals for xv6 are simplicity and clarity while providing a simple UNIX-like
-system-call interface. Several people have extended xv6 with a few more system calls and a sim-
-ple C library in order to run basic Unix programs. Modern kernels, however, provide many more
-system calls, and many more kinds of kernel services, than xv6. For example, they support net-
-working, windowing systems, user-level threads, drivers for many devices, and so on. Modern
-kernels evolve continuously and rapidly, and offer many features beyond POSIX.
-Unix unified access to multiple types of resources (files, directories, and devices) with a single
-set of file-name and file-descriptor interfaces. This idea can be extended to more kinds of resources;
-a good example is Plan 9 [16], which applied the “resources are files” concept to networks, graph-
-ics, and more. However, most Unix-derived operating systems have not followed this route.
-The file system and file descriptors have been powerful abstractions. Even so, there are other
-models for operating system interfaces. Multics, a predecessor of Unix, abstracted file storage in a
-way that made it look like memory, producing a very different flavor of interface. The complexity
-of the Multics design had a direct influence on the designers of Unix, who aimed to build something
-simpler.
-Xv6 does not provide a notion of users or of protecting one user from another; in Unix terms,
-all xv6 processes run as root.
-This book examines how xv6 implements its Unix-like interface, but the ideas and concepts
-apply to more than just Unix. Any operating system must multiplex processes onto the underlying
-hardware, isolate processes from each other, and provide mechanisms for controlled inter-process
-communication. After studying xv6, you should be able to look at other, more complex operating
-systems and see the concepts underlying xv6 in those systems as well.
+Interface (POSIX) standard.
+
+この Unix システムコールインタフェースは Portable System Interface (POSIX) 標準として
+標準化されている。
+
+Xv6 is not POSIX compliant:
+it is missing many system calls (including basic ones such as lseek),
+and many of the system calls it does provide differ from the standard.
+
+xv6 は POSIX 準拠ではない。
+多くのシステムコールが欠落している (lseek のような基本的なものも含む) し、
+提供しているシステムコールのうちの多くが標準とは異なっている。
+
+Our main goals for xv6 are simplicity and clarity while providing
+a simple UNIX-like system-call interface.
+
+我々の xv6 におけるメインの目標は、シンプルな UNIX-ライクシステムコールインタフェースを
+提供しつつも、シンプルさと分かりやすさを保つことだ。
+
+Several people have extended xv6 with a few more system calls and a simple C library
+in order to run basic Unix programs.
+
+何人かが既に、基本的な Unix プログラムを動かすために、
+いくらかのシステムコールとシンプルな C ライブラリを追加して xv6 を拡張している。
+
+Modern kernels, however, provide many more system calls,
+and many more kinds of kernel services, than xv6.
+
+しかし現代のカーネルは xv6 よりももっとたくさんのシステムコールと、
+もっとたくさんのカーネルサービスを提供している。
+
+For example, they support networking, windowing systems, user-level threads,
+drivers for many devices, and so on.
+
+例えば、ネットワーク、ウィンドウシステム、ユーザレベルスレッド、
+数多くのデバイスに対するドライバ、など。
+
+Modern kernels evolve continuously and rapidly, and offer many features beyond POSIX.
+
+現代のカーネルは継続的かつ急速に進化し、POSIX を超えた多くの機能を提供している。
+
+Unix unified access to multiple types of resources (files, directories, and devices)
+with a single set of file-name and file-descriptor interfaces.
+
+Unix は複数のタイプのリソース (ファイル、ディレクトリ、デバイス) へのアクセスを、
+ファイル名とファイルディスクリプタインタフェースの組み合わせで統一化した。
+
+This idea can be extended to more kinds of resources;
+a good example is Plan 9 [16], which applied the “resources are files” concept to networks,
+graphics, and more.
+
+このアイデアはもっと多くの種類のリソースに拡張できる。
+よい例が Plan 9 で、Plan 9 は「リソースとはファイルである」の概念を
+ネットワーク、グラフィクス、さらにその他に適用した。
+
+However, most Unix-derived operating systems have not followed this route.
+
+しかしながら、ほとんどの Unix 由来のオペレーティングシステムは
+このルートを辿らなかった。
+
+The file system and file descriptors have been powerful abstractions.
+
+ファイルシステムとファイルディスクリプタは強力な抽象である。
+
+Even so, there are other models for operating system interfaces.
+
+とはいえ、オペレーティングシステムインタフェースには他のモデルもある。
+
+Multics, a predecessor of Unix, abstracted file storage in a way that made it look like memory,
+producing a very different flavor of interface.
+
+Multics という Unix の前身では、ファイルストレージメモリのように見せることで抽象化し、
+全く異なる雰囲気のインタフェースを提供していた。
+
+The complexity of the Multics design had a direct influence on the designers of Unix,
+who aimed to build something simpler.
+
+Multics の設計の複雑さは Unix の設計者に直接的な影響を与え、
+何かをもっと簡単に組み立てることを目標とするようになった。
+(注: ケン・トンプソンらを指す。Unix は頓挫した Multics の中から便利そうな機能を
+抜き出してきてシンプルな設計で作られた。名前も Multi - Uni - cs/x である。)
+
+Xv6 does not provide a notion of users or of protecting one user from another;
+in Unix terms, all xv6 processes run as root.
+
+xv6 はユーザの概念や、あるユーザを他のユーザから守るといった概念を提供していない。
+Unix 用語でいうと、すべての xv6 プロセスはルート (権限) として動く。
+
+This book examines how xv6 implements its Unix-like interface,
+but the ideas and concepts apply to more than just Unix.
+
+この本は xv6 がどのようにして Unix ライクなインタフェースを実装しているかを
+見ていくが、アイデアと概念は Unix だけに限らずあてはまる。
+
+Any operating system must multiplex processes onto the underlying hardware,
+isolate processes from each other,
+and provide mechanisms for controlled inter-process communication.
+
+どのようなオペレーティングシステムでも下層のハードウェア上で複数のプロセスを多重化する必要があり、
+プロセス同士を隔離する必要があり、
+プロセス間通信のためのメカニズムを提供する必要がある。
+
+After studying xv6, you should be able to look at other,
+more complex operating systems and see the concepts underlying xv6 in those systems as well.
+
+xv6 を学んだ後は、他、つまりより複雑なオペレーティングシステムも読めるようになっているだろう。
+そしてそのようなシステムの中でも xv6 の根底にある概念を見ることができるだろう。
 
 ## Exercises
 
-1. Write a program that uses UNIX system calls to “ping-pong” a byte between two processes
-over a pair of pipes, one for each direction. Measure the program’s performance, in ex-
-changes per second.
+1. Write a program that uses UNIX system calls to “ping-pong” a byte
+between two processes over a pair of pipes, one for each direction.
+Measure the program’s performance, in exchanges per second.
+
+UNIX システムコールを使って、2つのプロセス間で2つのパイプ (1つあたりが片方向) による
+1 byte の "ping-pong" を行うプログラムを書け。
+(注: ping-pong - 何かを送ると何かを返す、という最もシンプルな二者間の通信プログラム)
+そのプログラムのパフォーマンスを、1秒あたりの交換数で測定せよ。
