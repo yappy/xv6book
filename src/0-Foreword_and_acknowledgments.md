@@ -8,7 +8,7 @@ This is a draft text intended for a class on operating systems.
 
 It explains the main concepts of operating systems by studying an example kernel, named xv6.
 
-このテキストは OS の主要な概念を、xv6 という名前のカーネルを例に説明している。
+このテキストはオペレーティングシステムの主要な概念を、xv6 という名前のカーネルを例に説明している。
 (注: カーネルは OS の中核部分のこと。)
 
 Xv6 is modeled on Dennis Ritchie’s and Ken Thompson’s Unix Version 6 (v6) [17].

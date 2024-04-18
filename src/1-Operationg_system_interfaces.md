@@ -5,14 +5,14 @@
 The job of an operating system is to share a computer among multiple programs and to provide a
 more useful set of services than the hardware alone supports.
 
-OS の仕事は一台のコンピュータを複数のプログラム間に分け与えることと、
+オペレーティングシステムの仕事は一台のコンピュータを複数のプログラム間に分け与えることと、
 ハードウェア単体がサポートするよりも便利なサービスのセットを提供することである。
 
 An operating system manages and abstracts the low-level hardware,
 so that, for example, a word processor need not concern itself
 with which type of disk hardware is being used.
 
-OS は低レベルのハードウェアを管理し抽象化する。
+オペレーティングシステムは低レベルのハードウェアを管理し抽象化する。
 その結果、例えば、ワープロ (注: 通じるのか？) はどのタイプのディスクハードウェアが
 使用されているか気にする必要がない。
 (注: ファイルを開いて読み書きする、という OS の機能を呼び出せば、HDD だろうが
@@ -21,8 +21,8 @@ SSD だろうが USB メモリだろうが共通のやり方でデータを読�
 An operating system shares the hardware among multiple programs
 so that they run (or appear to run) at the same time.
 
-複数のプログラムが同時に実行される (または同時に実行されているように見える) ために
-OS はハードウェアを複数のプログラム間に分け与える。
+複数のプログラムが同時に実行されるようにする (または同時に実行されているように見えるようにする) ために、
+オペレーティングシステムはハードウェアを複数のプログラム間に分け与える。
 (注: 昔はシングルコアで同時に1つのプログラムしか動かなかったため、時々動作中の
 プログラムを切り替えることによって同時実行しているように見せかけていたが、
 最近のマルチコアシステムではコア数までなら本当に物理的に同時に動く。
@@ -31,12 +31,12 @@ OS はハードウェアを複数のプログラム間に分け与える。
 Finally, operating systems provide controlled ways for programs to interact,
 so that they can share data or work together.
 
-最後に、OS はプログラム同士が通信する方法を提供する。
+最後に、オペレーティングシステムはプログラム同士が通信する方法を提供する。
 これにより、プログラムはデータを共有したり、協調して動いたりできる。
 
 An operating system provides services to user programs through an interface.
 
-OS はユーザプログラムに対してインタフェースを通してサービスを提供する。
+オペレーティングシステムはユーザプログラムに対してインタフェースを通してサービスを提供する。
 
 Designing a good interface turns out to be difficult.
 
@@ -63,13 +63,14 @@ that can be combined to provide much generality.
 This book uses a single operating system as a concrete example to illustrate operating system
 concepts.
 
-本書では、OS の概念を説明するために、1つの OS を具体的な例として用いている。
+本書では、オペレーティングシステムの概念を説明するために、
+1つのオペレーティングシステムを具体的な例として用いている。
 
 That operating system, xv6, provides the basic interfaces introduced by Ken Thompson
 and Dennis Ritchie’s Unix operating system [17], as well as mimicking Unix’s internal design.
 
-その OS、xv6 はケン・トンプソンとデニス・リッチーによって導入された基本的なインタフェースを提供し、
-Unix の内部設計を模倣している。
+そのオペレーティングシステム、xv6 はケン・トンプソンとデニス・リッチーによって導入された
+基本的なインタフェースを提供し、Unix の内部設計を模倣している。
 
 Unix provides a narrow interface whose mechanisms combine well, offering a surprising degree
 of generality.
@@ -80,9 +81,8 @@ Unix はそのメカニズムがうまく組み合わされた限定的なイン
 This interface has been so successful that modern operating systems—BSD, Linux,
 macOS, Solaris, and even, to a lesser extent, Microsoft Windows—have Unix-like interfaces.
 
-このインタフェースは大変成功していて、現代の OS - BSD, Linux, macOS, Solaris は、
-そしてやや程度は低くはなるが、Microsoft Windows でさえ、
-Unix ライクなインタフェースを持っている。
+このインタフェースは大変成功していて、現代のオペレーティングシステム - BSD, Linux, macOS, Solaris は、
+そしてやや程度は低くはなるが、Microsoft Windows でさえ、Unix ライクなインタフェースを持っている。
 
 Understanding xv6 is a good start toward understanding any of these systems and many others.
 
@@ -125,7 +125,7 @@ one of the calls in the operating system’s interface.
 
 あるプロセスがカーネルのサービスを呼び出す必要が出てきたとき、
 そのプロセスはシステムコールを呼ぶ。
-システムコールとは OS 内のインタフェース呼び出しの1つである。
+システムコールとはオペレーティングシステム内のインタフェース呼び出しの1つである。
 
 The system call enters the kernel; the kernel performs the service and returns.
 
