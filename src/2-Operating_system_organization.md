@@ -412,6 +412,8 @@ for example, enter the kernel at a point where the validation of arguments is sk
 
 ## Kernel organization
 
+カーネルの構成
+
 A key design question is what part of the operating system should run in supervisor mode.
 
 設計上のキーとなる問題は、オペレーティングシステムのどの部分をスーパーバイザモードで
@@ -693,67 +695,259 @@ trapframeFigure 2.3: Layout of a process’s virtual address space
 
 ## Process overview
 
-The unit of isolation in xv6 (as in other Unix operating systems) is a process. The process ab-
-straction prevents one process from wrecking or spying on another process’s memory, CPU, file
-descriptors, etc. It also prevents a process from wrecking the kernel itself, so that a process can’t
-subvert the kernel’s isolation mechanisms. The kernel must implement the process abstraction
-with care because a buggy or malicious application may trick the kernel or hardware into doing
-something bad (e.g., circumventing isolation). The mechanisms used by the kernel to implement
-processes include the user/supervisor mode flag, address spaces, and time-slicing of threads.
-To help enforce isolation, the process abstraction provides the illusion to a program that it has
-its own private machine. A process provides a program with what appears to be a private memory
-system, or address space, which other processes cannot read or write. A process also provides the
-program with what appears to be its own CPU to execute the program’s instructions.
-Xv6 uses page tables (which are implemented by hardware) to give each process its own ad-
-dress space. The RISC-V page table translates (or “maps”) a virtual address (the address that an
-RISC-V instruction manipulates) to a physical address (an address that the CPU chip sends to main
-memory).
+プロセスの概要
+
+The unit of isolation in xv6 (as in other Unix operating systems) is a process.
+
+xv6 における分離の単位 (他の Unix オペレーティングシステムと同じ) はプロセスである。
+
+The process abstraction prevents one process from wrecking or spying on
+another process’s memory, CPU, file descriptors, etc.
+
+プロセスによる抽象化はあるプロセスが他のプロセスのメモリ、CPU、ファイルディスクリプタ等を
+壊したり覗き見たりすることを防ぐ。
+
+It also prevents a process from wrecking the kernel itself,
+so that a process can’t subvert the kernel’s isolation mechanisms.
+
+また、プロセスがカーネル自体を破壊することも防ぐので、プロセスがカーネルの
+分離メカニズムを破壊することはできない。
+
+The kernel must implement the process abstraction with care because
+a buggy or malicious application may trick the kernel or hardware into
+doing something bad (e.g., circumventing isolation).
+
+カーネルはプロセス抽象を注意深く実装しなければならない。
+なぜならバグのある、または悪意のあるアプリケーションがカーネルやハードウェアを騙して
+何かよくないことをさせてくるかもしれないからである (例: 分離を回避する)。
+
+The mechanisms used by the kernel to implement processes include the user/supervisor mode flag,
+address spaces, and time-slicing of threads.
+
+カーネルがプロセスを実装するのに使うメカニズムには、ユーザ/スーパーバイザモードフラグ、
+アドレス空間、スレッドのタイムスライシングといったものがある。
+
+To help enforce isolation, the process abstraction provides the illusion to
+a program that it has its own private machine.
+
+分離を強力にするため、プロセス抽象はプログラムに自分だけのマシンを持っているかのような
+幻想を見せる。
+
+A process provides a program with what appears to be a private memory system,
+or address space, which other processes cannot read or write.
+
+プロセスはプライベートなメモリシステムに見えるものをプログラムに提供する。
+これはアドレス空間と呼ばれ、他のプロセスは読み書きができない。
+
+A process also provides the program with what appears to be its own CPU
+to execute the program’s instructions.
+
+また、プロセスはプログラムに自分の命令を実行する自分だけの CPU に見えるものを提供する。
+
+Xv6 uses page tables (which are implemented by hardware) to give each process
+its own address space.
+
+xv6 はページテーブル (これはハードウェアをによって実装される) を使って
+それぞれのプロセスに自分だけのアドレス空間を与える。
+
+The RISC-V page table translates (or “maps”) a virtual address
+(the address that an RISC-V instruction manipulates) to a physical address
+(an address that the CPU chip sends to main memory).
+
+RISC-V ページテーブルは仮想アドレス (RISC-V 命令が操作するアドレス) を
+物理アドレス (CPU チップがメインメモリへ送るアドレス) へ変換する (「マップする」ともいう)、
+
 Xv6 maintains a separate page table for each process that defines that process’s address space.
-As illustrated in Figure 2.3, an address space includes the process’s user memory starting at virtual
-address zero. Instructions come first, followed by global variables, then the stack, and finally a
-“heap” area (for malloc) that the process can expand as needed. There are a number of factors
-that limit the maximum size of a process’s address space: pointers on the RISC-V are 64 bits
-wide; the hardware only uses the low 39 bits when looking up virtual addresses in page tables; and
-xv6 only uses 38 of those 39 bits. Thus, the maximum address is 238 − 1 = 0x3fffffffff, which is
-26
-MAXVA (kernel/riscv.h:363). At the top of the address space xv6 reserves a page for a trampoline and
-a page mapping the process’s trapframe. Xv6 uses these two pages to transition into the kernel and
-back; the trampoline page contains the code to transition in and out of the kernel and mapping the
-trapframe is necessary to save/restore the state of the user process, as we will explain in Chapter 4.
-The xv6 kernel maintains many pieces of state for each process, which it gathers into a struct proc
-(kernel/proc.h:85). A process’s most important pieces of kernel state are its page table, its kernel
-stack, and its run state. We’ll use the notation p->xxx to refer to elements of the proc structure;
+
+xv6 はそれぞれのプロセスに対してそのプロセスのアドレス空間を定義する別々のページテーブルを管理する。
+
+As illustrated in Figure 2.3, an address space includes the process’s user memory
+starting at virtual address zero.
+
+図 2.3 に示すように、プロセスのユーザメモリを含むアドレス空間は仮想アドレスゼロから始まる。
+
+Instructions come first, followed by global variables, then the stack, and finally a
+“heap” area (for malloc) that the process can expand as needed.
+
+まず命令、次にグローバル変数、次にスタック、最後にプロセスが必要に応じて伸長できる
+「ヒープ」(malloc のため)。
+
+There are a number of factors that limit the maximum size of a process’s address space:
+pointers on the RISC-V are 64 bits wide;
+the hardware only uses the low 39 bits when looking up virtual addresses in page tables;
+and xv6 only uses 38 of those 39 bits.
+
+プロセスのアドレス空間の最大サイズを制限する要素はたくさんある。
+RISC-V のポインタは 64 ビット幅である。
+ハードウェアはページテーブルから仮想アドレスを引くときに下位 39 ビットのみしか使わない。
+そして xv6 はその 39 ビットのうち 38 ビットのみを使用する。
+
+Thus, the maximum address is 238 − 1 = 0x3fffffffff, which is MAXVA (kernel/riscv.h:363).
+
+したがって、最大アドレスは 2^38 - 1 = 0x3f_ffff_ffff
+
+At the top of the address space xv6 reserves a page for a trampoline and
+a page mapping the process’s trapframe.
+
+一番上のアドレス空間で xv6 はトランポリンのためのページとプロセスのトラップフレームを
+マップするページを予約している。
+
+Xv6 uses these two pages to transition into the kernel and back;
+the trampoline page contains the code to transition in and out of the kernel and
+mapping the trapframe is necessary to save/restore the state of the user process,
+as we will explain in Chapter 4.
+
+xv6 はこれら2つのページをカーネルに遷移するためと戻るために使う。
+トランポリンページにはカーネルへ入る・出るためのコードが入っており、
+トラップフレームのマッピングはユーザプロセスの状態を退避/復元 (save/restore) するために
+必要である。
+これは4章で説明する。
+
+The xv6 kernel maintains many pieces of state for each process,
+which it gathers into a struct proc (kernel/proc.h:85).
+
+xv6 カーネルはそれぞれのプロセスについてたくさんの状態の要素を管理しており、
+それは `struct proc` 構造体に集約されている (`kernel/proc.h:85`)。
+
+A process’s most important pieces of kernel state are its page table,
+its kernel stack, and its run state.
+
+プロセスの最も重要なカーネル状態の要素はページテーブル、カーネルスタック、実行状態である。
+
+We’ll use the notation p->xxx to refer to elements of the proc structure;
 for example, p->pagetable is a pointer to the process’s page table.
-Each process has a thread of execution (or thread for short) that executes the process’s instruc-
-tions. A thread can be suspended and later resumed. To switch transparently between processes,
-the kernel suspends the currently running thread and resumes another process’s thread. Much of
-the state of a thread (local variables, function call return addresses) is stored on the thread’s stacks.
-Each process has two stacks: a user stack and a kernel stack (p->kstack). When the process is
-executing user instructions, only its user stack is in use, and its kernel stack is empty. When the
-process enters the kernel (for a system call or interrupt), the kernel code executes on the process’s
-kernel stack; while a process is in the kernel, its user stack still contains saved data, but isn’t ac-
-tively used. A process’s thread alternates between actively using its user stack and its kernel stack.
-The kernel stack is separate (and protected from user code) so that the kernel can execute even if a
-process has wrecked its user stack.
-A process can make a system call by executing the RISC-V ecall instruction. This instruction
-raises the hardware privilege level and changes the program counter to a kernel-defined entry point.
+
+proc 構造体の要素を参照するのに `p->xxx` という表記を使うこととする。
+例えば、`p->pagetable` はプロセスのページテーブルへのポインタである。
+
+Each process has a thread of execution (or thread for short) that executes
+the process’s instructions.
+
+それぞれのプロセスはプロセスの命令を実行する thread of execution (略してスレッドという)
+を持つ。
+(注: 直訳すると「実行の脈絡」らしいが日本語ではほぼ(もしかしたら英語でも)使われない。)
+
+A thread can be suspended and later resumed.
+
+スレッドは中断したり後に再開したりできる (suspend - resume)。
+
+To switch transparently between processes,
+the kernel suspends the currently running thread and resumes another process’s thread.
+
+プロセス間を透過に切り替えるため、カーネルは現在実行中のスレッドを suspend し、
+他のプロセスのスレッドを resume する。
+
+Much of the state of a thread (local variables, function call return addresses) is
+stored on the thread’s stacks.
+
+スレッドの状態の多く (ローカル変数、関数呼び出しのリターンアドレス) は
+スレッドのスタックに格納されている。
+
+Each process has two stacks: a user stack and a kernel stack (p->kstack).
+
+それぞれのプロセスは2つのスタック持つ。
+ユーザスタックとカーネルスタック (p->kstack)。
+
+When the process is executing user instructions, only its user stack is in use,
+and its kernel stack is empty.
+
+プロセスがユーザ (モードで) 命令を実行中、ユーザスタックのみが使用され、カーネルスタックは空となる。
+
+When the process enters the kernel (for a system call or interrupt),
+the kernel code executes on the process’s kernel stack;
+
+プロセスがカーネルへ入る時 (システムコールまたは割り込みのため)、
+カーネルコードはプロセスのカーネルスタック上で実行される。
+
+while a process is in the kernel, its user stack still contains saved data,
+but isn’t actively used.
+
+プロセスがカーネル内にいる間、そのユーザスタックは保存データを保持したままとなるが、
+アクティブには使われない。
+
+A process’s thread alternates between actively using its user stack and its kernel stack.
+
+プロセスのスレッドはユーザスタックを使う状態とカーネルスタックを使う状態の間を切り替わる。
+
+The kernel stack is separate (and protected from user code) so that
+the kernel can execute even if a process has wrecked its user stack.
+
+もしプロセスが自分のユーザスタックを破壊してしまったとしてもカーネルを実行できるよう、
+カーネルスタックは分離されている (そしてユーザコードからは保護されている)。
+
+A process can make a system call by executing the RISC-V ecall instruction.
+
+プロセスは RISC-V の ecall 命令を実行することでシステムコールを行うことができる。
+
+This instruction raises the hardware privilege level and
+changes the program counter to a kernel-defined entry point.
+
+この命令はハードウェア特権レベルを上げ、プログラムカウンタをカーネル定義の
+エントリポイントへ変更する。
+
 The code at the entry point switches to a kernel stack and executes the kernel instructions that
-implement the system call. When the system call completes, the kernel switches back to the user
-stack and returns to user space by calling the sret instruction, which lowers the hardware privilege
-level and resumes executing user instructions just after the system call instruction. A process’s
-thread can “block” in the kernel to wait for I/O, and resume where it left off when the I/O has
-finished.
-p->state indicates whether the process is allocated, ready to run, running, waiting for I/O, or
-exiting.
-p->pagetable holds the process’s page table, in the format that the RISC-V hardware ex-
-pects. Xv6 causes the paging hardware to use a process’s p->pagetable when executing that
-process in user space. A process’s page table also serves as the record of the addresses of the
-physical pages allocated to store the process’s memory.
-In summary, a process bundles two design ideas: an address space to give a process the illusion
-of its own memory, and, a thread, to give the process the illusion of its own CPU. In xv6, a process
-consists of one address space and one thread. In real operating systems a process may have more
-than one thread to take advantage of multiple CPUs.
-2.6 Code: starting xv6, the first process and system call
+implement the system call.
+
+エントリポイントのコードはカーネルスタックに切り替え、
+システムコールを実装するカーネル命令を実行する。
+
+When the system call completes, the kernel switches back to the user stack and
+returns to user space by calling the sret instruction,
+which lowers the hardware privilege level and resumes executing user instructions
+just after the system call instruction.
+
+システムコールが完了したら、カーネルはユーザスタックへ切り替え、
+sret 命令を呼ぶことでユーザ空間へリターンする。
+sret 命令はハードウェア特権レベルを下げ、システムコール命令の直後から
+ユーザ命令の実行を再開する。
+
+A process’s thread can “block” in the kernel to wait for I/O, and resume where it left off when the I/O has finished.
+
+プロセスのスレッドは I/O を待つためにカーネル内で「ブロック」することができ、
+そして I/O が完了した時に中断した場所から再開することができる。
+
+p->state indicates whether the process is allocated, ready to run, running, waiting for I/O, or exiting.
+
+`p->state` はプロセスが以下のどの状態なのかを示す。
+確保された、実行準備完了、実行中、I/O 待ち、終了中。
+
+p->pagetable holds the process’s page table, in the format that the RISC-V hardware expects.
+
+`p->pagetable` は RISC-V ハードウェアが期待する形で、プロセスのページテーブルを保持する。
+
+Xv6 causes the paging hardware to use a process’s p->pagetable when executing that
+process in user space.
+
+xv6 はプロセスをユーザ空間で実行中、ページングハードウェアにプロセスの `p->pagetable` を
+使うようにさせる。
+
+A process’s page table also serves as the record of the addresses of the physical pages
+allocated to store the process’s memory.
+
+プロセスのページテーブルは、プロセスのメモリを格納するために確保された
+物理ページのアドレスの記録を提供するという働きもある。
+
+In summary, a process bundles two design ideas:
+an address space to give a process the illusion of its own memory, and,
+a thread, to give the process the illusion of its own CPU.
+
+まとめると、プロセスは2つの設計上のアイデアを含んでいる。
+プロセスに自分だけのメモリの幻想を見せるためのアドレス空間と、
+プロセスに自分だけの CPU の幻想を見せるためのスレッドである。
+
+In xv6, a process consists of one address space and one thread.
+
+xv6 では、1つのプロセスは1つのアドレス空間と1つのスレッドからなる。
+
+In real operating systems a process may have more than one thread to take advantage of multiple CPUs.
+
+現実のオペレーティングシステムでは、複数 CPU の利点を生かすために、
+1つのプロセスは1つより多いスレッドを持つことがある。
+
+## Code: starting xv6, the first process and system call
+
+コード: xv6 の開始、最初のプロセスとシステムコール
+
 To make xv6 more concrete, we’ll outline how the kernel starts and runs the first process. The
 subsequent chapters will describe the mechanisms that show up in this overview in more detail.
 27
