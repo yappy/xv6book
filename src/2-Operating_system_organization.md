@@ -948,45 +948,164 @@ In real operating systems a process may have more than one thread to take advant
 
 コード: xv6 の開始、最初のプロセスとシステムコール
 
-To make xv6 more concrete, we’ll outline how the kernel starts and runs the first process. The
-subsequent chapters will describe the mechanisms that show up in this overview in more detail.
-27
-When the RISC-V computer powers on, it initializes itself and runs a boot loader which is
-stored in read-only memory. The boot loader loads the xv6 kernel into memory. Then, in machine
-mode, the CPU executes xv6 starting at _entry (kernel/entry.S:7). The RISC-V starts with paging
-hardware disabled: virtual addresses map directly to physical addresses.
-The loader loads the xv6 kernel into memory at physical address 0x80000000. The reason it
-places the kernel at 0x80000000 rather than 0x0 is because the address range 0x0:0x80000000
-contains I/O devices.
-The instructions at _entry set up a stack so that xv6 can run C code. Xv6 declares space
-for an initial stack, stack0, in the file start.c (kernel/start.c:11). The code at _entry loads the
-stack pointer register sp with the address stack0+4096, the top of the stack, because the stack
-on RISC-V grows down. Now that the kernel has a stack, _entry calls into C code at start
-(kernel/start.c:21).
-The function start performs some configuration that is only allowed in machine mode, and
-then switches to supervisor mode. To enter supervisor mode, RISC-V provides the instruction
-mret. This instruction is most often used to return from a previous call from supervisor mode to
-machine mode. start isn’t returning from such a call, and instead sets things up as if there had
-been one: it sets the previous privilege mode to supervisor in the register mstatus, it sets the
-return address to main by writing main’s address into the register mepc, disables virtual address
-translation in supervisor mode by writing 0 into the page-table register satp, and delegates all
-interrupts and exceptions to supervisor mode.
-Before jumping into supervisor mode, start performs one more task: it programs the clock
-chip to generate timer interrupts. With this housekeeping out of the way, start “returns” to super-
-visor mode by calling mret. This causes the program counter to change to main (kernel/main.c:11).
-After main (kernel/main.c:11) initializes several devices and subsystems, it creates the first pro-
-cess by calling userinit (kernel/proc.c:233). The first process executes a small program written in
-RISC-V assembly, which makes the first system call in xv6. initcode.S (user/initcode.S:3) loads
-the number for the exec system call, SYS_EXEC (kernel/syscall.h:8), into register a7, and then calls
-ecall to re-enter the kernel.
+To make xv6 more concrete, we’ll outline how the kernel starts and runs the first process.
+
+xv6 をもっと明確にするために、カーネルがどのように開始するかと最初のプロセスを実行するかを
+概観していく。
+
+The subsequent chapters will describe the mechanisms that show up in this overview in more detail.
+
+以降の章ではこの概要に出てきたメカニズムをより詳しく解説する。
+
+When the RISC-V computer powers on, it initializes itself and runs a boot loader
+which is stored in read-only memory.
+
+RISC-V コンピュータの電源が入ると、自分自身を初期化し読み取り専用メモリ (ROM) に格納された
+ブートローダを実行する。
+
+The boot loader loads the xv6 kernel into memory.
+
+ブートローダは xv6 カーネルをメモリにロードする。
+
+Then, in machine mode, the CPU executes xv6 starting at _entry (kernel/entry.S:7).
+
+次に、マシンモードで、CPU は _entry で始まる xv6 を実行する (`kernel/entry.S:7`)。
+
+The RISC-V starts with paging hardware disabled: virtual addresses map directly to physical addresses.
+
+RISC-V はページングハードウェア無効の状態で開始する。
+仮想アドレスはダイレクトに物理アドレスにマップされている。
+
+The loader loads the xv6 kernel into memory at physical address 0x80000000.
+
+ローダは xv6 カーネルをメモリの物理アドレス 0x8000_0000 にロードする。
+
+The reason it places the kernel at 0x80000000 rather than 0x0 is
+because the address range 0x0:0x80000000 contains I/O devices.
+
+カーネルを 0x0 ではなく 0x8000_0000 に置く理由は、アドレスレンジ 0x0-0x8000_0000 には
+I/O デバイスが置かれているからである。
+
+The instructions at _entry set up a stack so that xv6 can run C code.
+
+_entry にある命令は xv6 が C コードを実行できるようスタックを設定する。
+
+Xv6 declares space for an initial stack, stack0, in the file start.c (kernel/start.c:11).
+
+xv6 は初期スタック stack0 の領域を start.c の中で宣言している (`kernel/start.c:11`)。
+
+The code at _entry loads the stack pointer register sp with the address stack0+4096,
+the top of the stack, because the stack on RISC-V grows down.
+
+_entry にあるコードはスタックポインタレジスタ sp にアドレス stack0+4096、
+スタックトップをロードする。
+これは RISC-V のスタックがアドレスが小さくなるほうに伸びるからである。
+
+Now that the kernel has a stack, _entry calls into C code at start (kernel/start.c:21).
+
+これでカーネルはスタックを持ったので、_entry は start の C コードを呼び出す (`kernel/start.c`)。
+
+The function start performs some configuration that is only allowed in machine mode,
+and then switches to supervisor mode.
+
+この start 関数はマシンモードのみで許可されたいくつかの設定を行い、
+次にスーパーバイザモードへ切り替える。
+
+To enter supervisor mode, RISC-V provides the instruction mret.
+
+スーパーバイザモードへ入るためには、RISC-V は mret 命令を提供している。
+
+This instruction is most often used to return from a previous call
+from supervisor mode to machine mode.
+
+この命令はスーパーバイザモードからマシンモードへの1つ前の呼び出しから戻る時に
+最もよく使われる命令である。
+
+start isn’t returning from such a call,
+and instead sets things up as if there had been one:
+it sets the previous privilege mode to supervisor in the register mstatus,
+it sets the return address to main by writing main’s address into the register mepc,
+disables virtual address translation in supervisor mode by writing 0 into the page-table register satp,
+and delegates all interrupts and exceptions to supervisor mode.
+
+start はそのような (スーパーバイザからマシンモードへの) 呼び出しから戻るわけではない。
+代わりに呼び出しがあったかのように設定を行う。
+レジスタ mstatus 内の前回の特権モードをスーパーバイザに、
+レジスタ mepc に main のアドレスを書き込むことによってリターンアドレスを main に、
+ページテーブルレジスタ satp に 0 を書き込むことによって
+スーパーバイザモードでの仮想アドレス変換を無効にし、
+すべての割り込みと例外をスーパバイザモードへ委譲する。
+(注: satp = Supervisor Address Translation and Protection)
+
+Before jumping into supervisor mode, start performs one more task:
+it programs the clock chip to generate timer interrupts.
+
+スーパーバイザモードへジャンプする前に、start はもう1つ仕事を行う。
+タイマ割り込みを生成するようクロックチップをプログラムする。
+
+With this housekeeping out of the way, start “returns” to supervisor mode by calling mret.
+This causes the program counter to change to main (kernel/main.c:11).
+
+このハウスキーピング処理を終えて、start は mret を呼ぶことでスーパーバイザモードへ
+「リターンする」。
+
+After main (kernel/main.c:11) initializes several devices and subsystems,
+it creates the first process by calling userinit (kernel/proc.c:233).
+
+main (`kernel/main.c:11`) がいくつかのデバイスやサブシステムを初期化した後、
+userinit (`kernel/proc.c:233`) を呼ぶことで最初のプロセスを生成する。
+
+The first process executes a small program written in RISC-V assembly,
+which makes the first system call in xv6.
+
+最初のプロセスは RISC-V アセンブリで書かれた小さなプログラムを実行し、
+それは xv6 で最初のシステムコールを発行する。
+
+initcode.S (user/initcode.S:3) loads the number for the exec system call,
+SYS_EXEC (kernel/syscall.h:8), into register a7, and then calls ecall to re-enter the kernel.
+
+initcode.S (`user/initcode.S:3`) は exec システムコールの番号
+SYS_EXEC (`kernel/syscall.h:8`) をレジスタ a7 にロードし、
+そして ecall を呼んで再度カーネルに入る。
+
 The kernel uses the number in register a7 in syscall (kernel/syscall.c:132) to call the desired
-system call. The system call table (kernel/syscall.c:107) maps SYS_EXEC to sys_exec, which the
-kernel invokes. As we saw in Chapter 1, exec replaces the memory and registers of the current
-process with a new program (in this case, /init).
-Once the kernel has completed exec, it returns to user space in the /init process. init
-(user/init.c:15) creates a new console device file if needed and then opens it as file descriptors 0, 1,
-and 2. Then it starts a shell on the console. The system is up.
-2.7 Security Model
+system call.
+
+カーネルは syscall (`kernel/syscall.c:132`) 内で、
+要求されたシステムコールを呼び出すためにレジスタ a7 に入っている番号を使う。
+
+The system call table (kernel/syscall.c:107) maps SYS_EXEC to sys_exec,
+which the kernel invokes.
+
+システムコールテーブル (`kernel/syscall.c:107`) は SYS_EXEC (番号) を sys_exec (関数) にマップし、
+カーネルはそれを呼び出す。
+
+As we saw in Chapter 1, exec replaces the memory and registers of the current process
+with a new program (in this case, /init).
+
+Chapter 1 で見たように、exec はカレントプロセスのメモリとレジスタを新しいプログラムで置き換える
+(今回の場合、`/init`)。
+
+Once the kernel has completed exec, it returns to user space in the /init process.
+
+カーネルが exec を完了すると、`/init` プロセスのユーザ空間にリターンする。
+
+init (user/init.c:15) creates a new console device file if needed and then
+opens it as file descriptors 0, 1, and 2.
+
+init (`user/init.c:15`) は必要ならば新しいコンソールデバイスを作成し、
+それをファイルディスクリプタ 0, 1, 2 としてオープンする。
+
+Then it starts a shell on the console.
+
+これでシェルがコンソール上で動き出す。
+
+The system is up.
+
+システムが起動した。
+
+## Security Model
+
 You may wonder how the operating system deals with buggy or malicious code. Because coping
 with malice is strictly harder than dealing with accidental bugs, it’s reasonable to view this topic as
 relating to security. Here’s a high-level view of typical security assumptions and goals in operating
