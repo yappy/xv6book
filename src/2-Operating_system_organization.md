@@ -332,48 +332,143 @@ Xv6 executes a few lines in machine mode and then changes to supervisor mode.
 
 xv6 はマシンモードで数行を実行し、その後スーパバイザモードへ変更する。
 
-In supervisor mode the CPU is allowed to execute privileged instructions: for example, en-
-abling and disabling interrupts, reading and writing the register that holds the address of a page
-table, etc. If an application in user mode attempts to execute a privileged instruction, then the CPU
-doesn’t execute the instruction, but switches to supervisor mode so that supervisor-mode code can
-terminate the application, because it did something it shouldn’t be doing. Figure 1.1 in Chapter 1
-illustrates this organization. An application can execute only user-mode instructions (e.g., adding
-numbers, etc.) and is said to be running in user space, while the software in supervisor mode can
-also execute privileged instructions and is said to be running in kernel space. The software running
-in kernel space (or in supervisor mode) is called the kernel.
-An application that wants to invoke a kernel function (e.g., the read system call in xv6) must
-transition to the kernel; an application cannot invoke a kernel function directly. CPUs provide a
-special instruction that switches the CPU from user mode to supervisor mode and enters the kernel
-at an entry point specified by the kernel. (RISC-V provides the ecall instruction for this purpose.)
-Once the CPU has switched to supervisor mode, the kernel can then validate the arguments of the
-system call (e.g., check if the address passed to the system call is part of the application’s memory),
-decide whether the application is allowed to perform the requested operation (e.g., check if the
-application is allowed to write the specified file), and then deny it or execute it. It is important that
-the kernel control the entry point for transitions to supervisor mode; if the application could decide
-the kernel entry point, a malicious application could, for example, enter the kernel at a point where
-the validation of arguments is skipped.
-2.3 Kernel organization
-A key design question is what part of the operating system should run in supervisor mode. One
-possibility is that the entire operating system resides in the kernel, so that the implementations of
-all system calls run in supervisor mode. This organization is called a monolithic kernel.
-In this organization the entire operating system runs with full hardware privilege. This organi-
-zation is convenient because the OS designer doesn’t have to decide which part of the operating
-system doesn’t need full hardware privilege. Furthermore, it is easier for different parts of the op-
-erating system to cooperate. For example, an operating system might have a buffer cache that can
-be shared both by the file system and the virtual memory system.
-A downside of the monolithic organization is that the interfaces between different parts of the
-operating system are often complex (as we will see in the rest of this text), and therefore it is
-23
+In supervisor mode the CPU is allowed to execute privileged instructions:
+for example, enabling and disabling interrupts,
+reading and writing the register that holds the address of a page table, etc.
+
+スーパーバイザモードでは CPU は特権命令を実行することができる。
+例えば、割り込みを有効または無効にする、
+ページテーブルのアドレスを保持するレジスタを読み書きする、等。
+
+If an application in user mode attempts to execute a privileged instruction,
+then the CPU doesn’t execute the instruction,
+but switches to supervisor mode so that supervisor-mode code can terminate the application,
+because it did something it shouldn’t be doing.
+
+ユーザモードでアプリケーションが特権命令を実行しようとした場合、CPU はその命令を実行しないが、
+スーパーバイザモードのコードがアプリケーションを終了できるようスーパーバイザモードへ切り替わる。
+なぜならユーザモードのアプリケーションがやってはいけないことをやったからだ。
+
+Figure 1.1 in Chapter 1　illustrates this organization.
+
+1章の図1.1にこの構成を示している。
+
+An application can execute only user-mode instructions (e.g., adding numbers, etc.)
+and is said to be running in user space,
+while the software in supervisor mode can also execute privileged instructions and
+is said to be running in kernel space.
+
+アプリケーションはユーザモード命令のみを実行できる (例: 足し算を行う、等)。
+そしてこれはユーザ空間で動いているという。
+対してスーパーバイザモードのソフトウェアは特権命令を実行することができ、
+これはカーネル空間で動いているという。
+
+The software running in kernel space (or in supervisor mode) is called the kernel.
+
+カーネル空間で (つまりスーパーバイザモードで) 動作しているソフトウェアのことを
+カーネルと呼ぶ。
+
+An application that wants to invoke a kernel function
+(e.g., the read system call in xv6) must transition to the kernel;
+an application cannot invoke a kernel function directly.
+
+カーネルの機能を呼び出したいアプリケーション (例: xv6 の read システムコール) は
+カーネルに遷移しなくてはならない。
+アプリケーションはカーネルの機能を直接呼び出すことはできない。
+
+CPUs provide a special instruction that switches the CPU
+from user mode to supervisor mode and enters the kernel at an entry point
+specified by the kernel.
+
+CPU は、CPU をユーザモードからスーパーバイザモードに切り替えてカーネルに指定された
+エントリポイントからカーネルに入る特別な命令を提供する。
+
+(RISC-V provides the ecall instruction for this purpose.)
+
+RISC-V は ecall 命令をこの目的で提供する。
+(注: environment-call。RISC-V 用語で自分を管理する一段上の世界を environment と呼ぶ。)
+
+Once the CPU has switched to supervisor mode,
+the kernel can then validate the arguments of the system call
+(e.g., check if the address passed to the system call is part of the application’s memory),
+decide whether the application is allowed to perform the requested operation
+(e.g., check if the application is allowed to write the specified file),
+and then deny it or execute it.
+
+CPU がスーパーバイザモードに切り替わると、カーネルはシステムコールの引数を検証することができる。
+(例: システムコールに渡されたアドレスがアプリケーションのメモリの一部であるかをチェックする)
+そしてアプリケーションが要求した操作を行ってよいかどうかを決定できる。
+(例: アプリケーションが指定されたファイルに書き込んでよいかをチェックする)
+そしてリクエストを拒否するか実行するかできる。
+
+It is important that the kernel control the entry point for transitions to supervisor mode;
+if the application could decide the kernel entry point, a malicious application could,
+for example, enter the kernel at a point where the validation of arguments is skipped.
+
+カーネルがスーパーバイザモードへの遷移のエントリポイントを制御するのは重要なことである。
+もしアプリケーションがカーネルエントリポイントを決定できてしまうと、
+悪意のあるアプリケーションが、例えば、引数の検証をスキップした後の場所から
+カーネルの中に入れてしまう。
+
+## Kernel organization
+
+A key design question is what part of the operating system should run in supervisor mode.
+
+設計上のキーとなる問題は、オペレーティングシステムのどの部分をスーパーバイザモードで
+実行すべきかということだ。
+
+One possibility is that the entire operating system resides in the kernel,
+so that the implementations of all system calls run in supervisor mode.
+
+一つの可能性としては、オペレーティングシステム全体をカーネル内に置くというものがある。
+結果としてすべてのシステムコールの実装はスーパーバイザモードで動くことになる。
+
+This organization is called a monolithic kernel.
+
+この構成法はモノリシックカーネルと呼ばれる。
+(注: モノリス(一枚岩)的な、という意味)
+
+In this organization the entire operating system runs with full hardware privilege.
+
+この構成では、オペレーティングシステム全体が完全なハードウェア特権で実行される。
+
+This organization is convenient because the OS designer doesn’t have to decide
+which part of the operating system doesn’t need full hardware privilege.
+
+この構成法は OS 設計者がオペレーティングシステムのどの部分が全ハードウェア特権を必要としないのかを
+判定する必要がないという点で、簡便である。
+
+Furthermore, it is easier for different parts of the operating system to cooperate.
+
+さらに、オペレーティングシステムの異なる箇所同士が協調動作するのが (マイクロカーネルよりも)
+簡単になる。
+
+For example, an operating system might have a buffer cache
+that can be shared both by the file system and the virtual memory system.
+
+例えば、オペレーティングシステムはファイルシステムと仮想メモリシステムの両方から共有される
+バッファキャッシュを持つかもしれない。
+(注: ファイルの読み書きをした時にその内容をカーネル内のメモリ上に残して性能を上げる仕組み。
+当然ファイルシステムとメモリ管理システムの両方と密接な連携が必要。)
+
+A downside of the monolithic organization is that the interfaces
+between different parts of the operating system are often complex
+(as we will see in the rest of this text),
+and therefore it is easy for an operating system developer to make a mistake.
+
+In a monolithic kernel, a mistake is fatal,
+because an error in supervisor mode will often cause the kernel to fail.
+
+If the kernel fails, the computer stops working, and thus all applications fail too.
+The computer must reboot to start again.
+
 Microkernel
 shell File serveruser
 space
 kernel
 space
 Send messageFigure 2.1: A microkernel with a file-system server
-easy for an operating system developer to make a mistake. In a monolithic kernel, a mistake is
-fatal, because an error in supervisor mode will often cause the kernel to fail. If the kernel fails,
-the computer stops working, and thus all applications fail too. The computer must reboot to start
-again.
+
 To reduce the risk of mistakes in the kernel, OS designers can minimize the amount of operating
 system code that runs in supervisor mode, and execute the bulk of the operating system in user
 mode. This kernel organization is called a microkernel.
