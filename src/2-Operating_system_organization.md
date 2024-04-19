@@ -1106,45 +1106,172 @@ The system is up.
 
 ## Security Model
 
-You may wonder how the operating system deals with buggy or malicious code. Because coping
-with malice is strictly harder than dealing with accidental bugs, it’s reasonable to view this topic as
-relating to security. Here’s a high-level view of typical security assumptions and goals in operating
-system design.
-28
-The operating system must assume that a process’s user-level code will do its best to wreck the
-kernel or other processes. User code may try to dereference pointers outside its allowed address
-space; it may attempt to execute any RISC-V instructions, even those not intended for user code;
-it may try to read and write any RISC-V control register; it may try to directly access device
-hardware; and it may pass clever values to system calls in an attempt to trick the kernel into
-crashing or doing something stupid. The kernel’s goal to restrict each user processes so that all it
-can do is read/write/execute its own user memory, use the 32 general-purpose RISC-V registers,
-and affect the kernel and other processes in the ways that system calls are intended to allow. The
-kernel must prevent any other actions. This is typically an absolute requirement in kernel design.
-The expectations for the kernel’s own code are quite different. Kernel code is assumed to be
-written by well-meaning and careful programmers. Kernel code is expected to be bug-free, and
-certainly to contain nothing malicious. This assumption affects how we analyze kernel code. For
-example, there are many internal kernel functions (e.g., the spin locks) that would cause serious
-problems if kernel code used them incorrectly. When examining any specific piece of kernel code,
-we’ll want to convince ourselves that it behaves correctly. We assume, however, that kernel code
-in general is correctly written, and follows all the rules about use of the kernel’s own functions and
-data structures. At the hardware level, the RISC-V CPU, RAM, disk, etc. are assumed to operate
+セキュリティモデル
+
+You may wonder how the operating system deals with buggy or malicious code.
+
+オペレーティングシステムはどのようにしてバグのある、または悪意のあるコードに
+対処するのだろうかと思うかもしれない。
+
+Because coping with malice is strictly harder than dealing with accidental bugs,
+it’s reasonable to view this topic as relating to security.
+
+悪意に対処するのは偶発的なバグに対処するよりも確実に難しいため、
+このトピックをセキュリティ関連として見ていくのが合理的だ。
+
+Here’s a high-level view of typical security assumptions and goals in operating system design.
+
+ここではオペレーティングシステム設計における典型的なセキュリティ上の仮定と目標についての
+概観を示す。
+
+The operating system must assume that a process’s user-level code will do
+its best to wreck the kernel or other processes.
+
+オペレーティングシステムはプロセスのユーザレベルコードはカーネルや他のプロセスを破壊するために
+全力を尽くすと仮定しなければならない。
+
+User code may try to dereference pointers outside its allowed address space;
+it may attempt to execute any RISC-V instructions, even those not intended for user code;
+it may try to read and write any RISC-V control register;
+it may try to directly access device hardware;
+and it may pass clever values to system calls in an attempt to trick the kernel
+into crashing or doing something stupid.
+
+ユーザコードは許可されたアドレス空間の外のポインタをデリファレンスするかもしれない。
+あらゆる RISC-V 命令を実行しようとするかもしれない。ユーザコード用でないものも。
+あらゆる RISC-V 制御レジスタを読み書きしようとするかもしれない。
+デバイスハードウェアに直接アクセスしようとするかもしれない。
+そしてカーネルを騙してクラッシュさせたり愚かな動作をさせるために
+システムコールに巧妙な値を渡してくるかもしれない。
+
+The kernel’s goal to restrict each user processes
+so that all it can do is read/write/execute its own user memory,
+use the 32 general-purpose RISC-V registers,
+and affect the kernel and other processes in the ways that system calls are intended to allow.
+
+カーネルの目標は、ユーザプロセスができるのは以下がすべてになるように
+それぞれのユーザプロセスを制限することだ。
+自分のユーザメモリを読む/書く/実行すること、
+32 個の汎用 RISC-V レジスタを使うこと、
+システムコールが意図して許可した方法でカーネルや他のプロセスに影響を与えること。
+
+The kernel must prevent any other actions.
+
+カーネルは他のすべてのアクションを防がなければならない。
+
+This is typically an absolute requirement in kernel design.
+
+これは通常、カーネル設計における絶対的な要件である。
+
+The expectations for the kernel’s own code are quite different.
+
+カーネル自身のコードに対する期待は全く異なる。
+
+Kernel code is assumed to be written by well-meaning and careful programmers.
+
+カーネルコードは善意の注意深いプログラマによって書かれていると仮定される。
+
+Kernel code is expected to be bug-free, and certainly to contain nothing malicious.
+
+カーネルコードにはバグがなく、悪意のあるものは一切含まれないと期待される。
+
+This assumption affects how we analyze kernel code.
+
+この仮定は我々がカーネルコードを解析する方法にも影響する。
+
+For example, there are many internal kernel functions (e.g., the spin locks)
+that would cause serious problems if kernel code used them incorrectly.
+
+例えば、もしカーネルコードが誤った使い方をすれば深刻な問題を引き起こすような
+たくさんの内部カーネル関数 (例: スピンロック) が存在する。
+(注: まだ出てきていないがアンロックを忘れるとそのコアが割り込み不能状態のまま固まる)
+
+When examining any specific piece of kernel code,
+we’ll want to convince ourselves that it behaves correctly.
+
+カーネルコードの特定の部分を調べるとき、それが正しく動くものと思い込みたいだろう。
+
+We assume, however, that kernel code in general is correctly written,
+and follows all the rules about use of the kernel’s own functions and data structures.
+
+しかし、カーネルコードは一般に正しく書かれており、
+カーネル自身の関数やデータ構造の使い方のルールをすべて守っていると仮定する。
+
+At the hardware level, the RISC-V CPU, RAM, disk, etc. are assumed to operate
 as advertised in the documentation, with no hardware bugs.
-Of course in real life things are not so straightforward. It’s difficult to prevent clever user code
-from making a system unusable (or causing it to panic) by consuming kernel-protected resources
-– disk space, CPU time, process table slots, etc. It’s usually impossible to write bug-free code or
-design bug-free hardware; if the writers of malicious user code are aware of kernel or hardware
-bugs, they will exploit them. Even in mature, widely-used kernels, such as Linux, people discover
-new vulnerabilities continuously [1]. It’s worthwhile to design safeguards into the kernel against
-the possibility that it has bugs: assertions, type checking, stack guard pages, etc. Finally, the dis-
-tinction between user and kernel code is sometimes blurred: some privileged user-level processes
-may provide essential services and effectively be part of the operating system, and in some oper-
-ating systems privileged user code can insert new code into the kernel (as with Linux’s loadable
-kernel modules).
-2.8 Real world
-Most operating systems have adopted the process concept, and most processes look similar to
-xv6’s. Modern operating systems, however, support several threads within a process, to allow a
-single process to exploit multiple CPUs. Supporting multiple threads in a process involves quite a
-bit of machinery that xv6 doesn’t have, including potential interface changes (e.g., Linux’s clone,
-a variant of fork), to control which aspects of a process threads share.
-2.9 Exercises
+
+ハードウェアレベルでは、RISC-V CPU、RAM、ディスク等にはハードウェアバグはなく、
+ドキュメントでうたわれている通りに動作するものと仮定する。
+
+Of course in real life things are not so straightforward.
+
+もちろん現実では物事はそう単純ではない。
+
+It’s difficult to prevent clever user code from making a system unusable
+(or causing it to panic) by consuming kernel-protected resources
+– disk space, CPU time, process table slots, etc.
+
+巧妙なユーザコードがカーネルに保護されたリソース、つまり
+ディスク容量、CPU 時間、プロセステーブルスロット、等を消費して
+システムを使用不能にしようとする (panic させようとする) のを防ぐのは難しい。
+
+It’s usually impossible to write bug-free code or design bug-free hardware;
+if the writers of malicious user code are aware of kernel or hardware bugs,
+they will exploit them.
+
+バグのないコードを書く、またはバグのないハードウェアを設計するというのは
+通常不可能である。
+悪意のあるユーザコードの作者がカーネルやハードウェアバグに気づいていれば、
+そこを突かれてしまうだろう。
+
+Even in mature, widely-used kernels, such as Linux,
+people discover new vulnerabilities continuously [1].
+
+Linux のような成熟し、広く使われているカーネルでさえ、
+絶えず新たな脆弱性が発見され続けている。
+
+It’s worthwhile to design safeguards into the kernel against the possibility that it has bugs:
+assertions, type checking, stack guard pages, etc.
+
+バグがある可能性に対してカーネルにセーフガードを設計することには価値がある。
+アサーション、型チェック、スタックガードページ、等。
+
+Finally, the distinction between user and kernel code is sometimes blurred:
+some privileged user-level processes may provide essential services and
+effectively be part of the operating system, and in some operating systems
+privileged user code can insert new code into the kernel
+(as with Linux’s loadable kernel modules).
+
+最後に、ユーザとカーネルのコードの区別が曖昧になることがある。
+特権ユーザレベルのプロセスの中には必要不可欠なサービスを提供し、
+実質的にオペレーティングシステムの一部となっているものもある。
+そして一部のオペレーティングシステムの特権ユーザコードはカーネルに新しいコードを挿入できる
+(Linux のローダブルカーネルモジュールのように)。
+
+## Real world
+
+Most operating systems have adopted the process concept,
+and most processes look similar to xv6’s.
+
+ほとんどのオペレーティングシステムはプロセスの概念を採用している。
+
+Modern operating systems, however, support several threads within a process,
+to allow a single process to exploit multiple CPUs.
+
+しかし現代のオペレーティングシステムは1つのプロセスに複数のスレッドをサポートしており、
+1つのプロセスが複数の CPU を活用することができる。
+
+Supporting multiple threads in a process involves quite a bit of machinery that xv6 doesn’t have,
+including potential interface changes (e.g., Linux’s clone, a variant of fork),
+to control which aspects of a process threads share.
+
+1つのプロセスで複数のスレッドをサポートするためには
+インタフェースの変更 (例: fork の亜種である Linux の clone) の可能性を含め、
+スレッドがプロセスのどの部分を共有するかを制御するために、
+xv6 が持っていないかなりの量の機構が必要になる。
+
+## Exercises
+
 1. Add a system call to xv6 that returns the amount of free memory available.
+
+xv6 に利用可能な空きメモリの量を返すシステムコールを追加せよ。
