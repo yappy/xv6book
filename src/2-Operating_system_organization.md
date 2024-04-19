@@ -456,12 +456,26 @@ between different parts of the operating system are often complex
 (as we will see in the rest of this text),
 and therefore it is easy for an operating system developer to make a mistake.
 
+モノリシックな構成の欠点は、オペレーティングシステムの異なるパーツ間のインタフェースが
+複雑になりがちなことだ(このテキストの続きで見ていくことになるだろう)。
+そしてそれによってオペレーティングシステムの開発者はミスを犯しやすくなる。
+
 In a monolithic kernel, a mistake is fatal,
 because an error in supervisor mode will often cause the kernel to fail.
 
+モノリシックカーネルでは、ミスは致命的だ。
+なぜならスーパーバイザモードでの1つのエラーがカーネルを落としてしまうことも多いからだ。
+
 If the kernel fails, the computer stops working, and thus all applications fail too.
+
+カーネルが落ちると、コンピュータは動作を停止し、その結果すべてのアプリケーションも
+止まってしまう。
+
 The computer must reboot to start again.
 
+そのコンピュータを再度動かすためには再起動しなければならない。
+
+TODO:
 Microkernel
 shell File serveruser
 space
@@ -469,37 +483,158 @@ kernel
 space
 Send messageFigure 2.1: A microkernel with a file-system server
 
-To reduce the risk of mistakes in the kernel, OS designers can minimize the amount of operating
-system code that runs in supervisor mode, and execute the bulk of the operating system in user
-mode. This kernel organization is called a microkernel.
-Figure 2.1 illustrates this microkernel design. In the figure, the file system runs as a user-level
-process. OS services running as processes are called servers. To allow applications to interact with
-the file server, the kernel provides an inter-process communication mechanism to send messages
-from one user-mode process to another. For example, if an application like the shell wants to read
-or write a file, it sends a message to the file server and waits for a response.
-In a microkernel, the kernel interface consists of a few low-level functions for starting applica-
-tions, sending messages, accessing device hardware, etc. This organization allows the kernel to be
-relatively simple, as most of the operating system resides in user-level servers.
-In the real world, both monolithic kernels and microkernels are popular. Many Unix kernels
-are monolithic. For example, Linux has a monolithic kernel, although some OS functions run as
-user-level servers (e.g., the windowing system). Linux delivers high performance to OS-intensive
-applications, partially because the subsystems of the kernel can be tightly integrated.
+To reduce the risk of mistakes in the kernel,
+OS designers can minimize the amount of operating system code that runs in supervisor mode,
+and execute the bulk of the operating system in usermode.
+
+カーネル内でのミスのリスクを低減するために、OS 設計者はスーパーバイザモードで動く
+オペレーティングシステムのコードを最小化し、
+オペレーティングシステムの大部分をユーザモードで実行することもできる。
+
+This kernel organization is called a microkernel.
+
+このカーネル構成法をマイクロカーネルと呼ぶ。
+
+Figure 2.1 illustrates this microkernel design.
+
+図 2.1 にこのマイクロカーネルの設計を示す。
+
+In the figure, the file system runs as a user-level process.
+
+図中で、ファイルシステムはユーザレベルプロセスとして動いている。
+
+OS services running as processes are called servers.
+
+プロセスとして動いている OS のサービスはサーバと呼ばれる。
+
+To allow applications to interact with the file server,
+the kernel provides an inter-process communication mechanism
+to send messages from one user-mode process to another.
+
+アプリケーションがファイルサーバとやりとりを行えるよう、カーネルは
+あるユーザモードプロセスからもう1つにメッセージを送れるような
+プロセス間通信のメカニズムを提供する。
+
+For example, if an application like the shell wants to read or write a file,
+it sends a message to the file server and waits for a response.
+
+例えば、もしシェルのようなアプリケーションがファイルを読み書きしたい場合、
+ファイルサーバにメッセージを送ってその応答を待つ。
+
+In a microkernel, the kernel interface consists of a few low-level functions
+for starting applications, sending messages, accessing device hardware, etc.
+
+マイクロカーネルでは、カーネルインタフェースはアプリケーションを起動する、
+メッセージを送る、デバイスハードウェアにアクセスする、等のための
+少数の低レベル機能からなる。
+
+This organization allows the kernel to be relatively simple,
+as most of the operating system resides in user-level servers.
+
+ほとんどのオペレーティングシステムの機能がユーザレベルサーバに置かれるため、
+この構成によってカーネルを比較的シンプルにできる。
+
+In the real world, both monolithic kernels and microkernels are popular.
+
+現実世界では、モノリシックカーネルとマイクロカーネルはどちらもポピュラーである。
+
+Many Unix kernels are monolithic.
+
+多くの Unix カーネルはモノリシックだ。
+
+For example, Linux has a monolithic kernel, although some OS functions run as
+user-level servers (e.g., the windowing system).
+
+例えば、Linux はいくつかの OS 機能がユーザレベルサーバで動く (例: ウィンドウシステム) とはいえ、
+モノリシックカーネルだ。
+
+Linux delivers high performance to OS-intensive applications,
+partially because the subsystems of the kernel can be tightly integrated.
+
+Linux は OS を多用するアプリケーションに高いパフォーマンスを提供するが、
+この理由の一部はカーネルのサブシステムが密に結合しているからだ。
+
 Operating systems such as Minix, L4, and QNX are organized as a microkernel with servers,
-and have seen wide deployment in embedded settings. A variant of L4, seL4, is small enough that
+and have seen wide deployment in embedded settings.
+
+Minix, L4, ANX のようなオペレーティングシステムはサーバによるマイクロカーネルとして構成される。
+そして広い範囲の組み込み開発環境を考慮している。
+
+A variant of L4, seL4, is small enough that
 it has been verified for memory safety and other security properties [8].
-There is much debate among developers of operating systems about which organization is
-better, and there is no conclusive evidence one way or the other. Furthermore, it depends much on
-what “better” means: faster performance, smaller code size, reliability of the kernel, reliability of
-the complete operating system (including user-level services), etc.
-There are also practical considerations that may be more important than the question of which
-organization. Some operating systems have a microkernel but run some of the user-level services
-in kernel space for performance reasons. Some operating systems have monolithic kernels because
+
+L4 の変形である seL4 は十分に小さく、メモリ安全性とその他のセキュリティ特性が
+検証完了している。
+(注: バグがないことの形式的証明つきらしい)
+
+There is much debate among developers of operating systems about which organization is better,
+and there is no conclusive evidence one way or the other.
+
+どちらの構成法がよいかということに関してはオペレーティングシステム開発者の間で多くの議論がある。
+そして決定的な証拠はどちらにもない。
+
+Furthermore, it depends much on what “better” means:
+faster performance, smaller code size, reliability of the kernel,
+reliability of the complete operating system (including user-level services), etc.
+
+さらに、それは「よい」が何を意味するのかに大きく依存する。
+速いパフォーマンス、小さいコードサイズ、カーネルの信頼性、
+完全なオペレーティングシステムとしての信頼性 (ユーザレベルサービスを含む)、等。
+
+There are also practical considerations that may be more important than
+the question of which organization.
+
+どちらの構成法が、という問いよりももっと重要かもしれない、実用的な考慮事項もある。
+
+Some operating systems have a microkernel but run some of the user-level services
+in kernel space for performance reasons.
+
+マイクロカーネルだがいくつかのユーザレベルサービスをパフォーマンス上の理由で
+カーネル空間で動かすオペレーティングシステムも存在する。
+
+Some operating systems have monolithic kernels because
 that is how they started and there is little incentive to move to a pure microkernel organization,
-because new features may be more important than rewriting the existing operating system to fit a
-microkernel design.
-From this book’s perspective, microkernel and monolithic operating systems share many key
-ideas. They implement system calls, they use page tables, they handle interrupts, they support
-24
+because new features may be more important than rewriting the existing operating system to fit a microkernel design.
+
+モノリシックで始まったため、そして純粋なマイクロカーネルへ移行する動機に乏しいため、
+モノリシックカーネルを採用し続けているオペレーティングシステムもある。
+
+From this book’s perspective,
+microkernel and monolithic operating systems share many key ideas.
+
+本書の観点で言うと、マイクロカーネルとモノリシックなオペレーティングシステムには
+多くの鍵となるアイデアが共通している。
+
+They implement system calls, they use page tables, they handle interrupts,
+they support processes, they use locks for concurrency control,
+they implement a file system, etc.
+
+どちらもシステムコールを実装し、どちらもページテーブルを使い、どちらも割り込みをハンドルし、
+どちらもプロセスをサポートし、どちらも並行性を制御するためロックを使い、
+どちらもファイルシステムを実装する。
+
+This book focuses on these core ideas.
+
+本書はこれらのコアなアイデアにフォーカスする。
+
+Xv6 is implemented as a monolithic kernel, like most Unix operating systems.
+
+xv6 は多くの Unix オペレーティングシステムのように、モノリシックカーネルとして実装されている。
+
+Thus, the xv6 kernel interface corresponds to the operating system interface,
+and the kernel implements the complete operating system.
+
+したがって、xv6 カーネルのインタフェースはオペレーティングシステムのインタフェースに相当し、
+カーネルはオペレーティングシステム全体を実装する。
+
+Since xv6 doesn’t provide many services, its kernel is smaller than some microkernels,
+but conceptually xv6 is monolithic.
+
+xv6 は多くのサービスを提供するわけではないため、そのカーネルはいくつかのマイクロカーネルよりも小さいが、
+概念上は xv6 はモノリシックである。
+
+TODO:
+
 File Description
 bio.c Disk block cache for the file system.
 console.c Connect to the user keyboard and screen.
@@ -529,16 +664,25 @@ uart.c Serial-port console device driver.
 virtio_disk.c Disk device driver.
 vm.c Manage page tables and address spaces.
 Figure 2.2: Xv6 kernel source files.
-processes, they use locks for concurrency control, they implement a file system, etc. This book
-focuses on these core ideas.
-Xv6 is implemented as a monolithic kernel, like most Unix operating systems. Thus, the xv6
-kernel interface corresponds to the operating system interface, and the kernel implements the com-
-plete operating system. Since xv6 doesn’t provide many services, its kernel is smaller than some
-microkernels, but conceptually xv6 is monolithic.
-2.4 Code: xv6 organization
-The xv6 kernel source is in the kernel/ sub-directory. The source is divided into files, following
-a rough notion of modularity; Figure 2.2 lists the files. The inter-module interfaces are defined in
-25
+
+## Code: xv6 organization
+
+コード: xv6 の構成
+
+The xv6 kernel source is in the kernel/ sub-directory.
+
+xv6 カーネルソースは `kernel` サブディレクトリ内にある。
+
+The source is divided into files, following a rough notion of modularity;
+Figure 2.2 lists the files.
+
+ソースはおおまかなモジュール性の考えにしたがい、複数のファイルに分かれている。
+
+The inter-module interfaces are defined in defs.h (kernel/defs.h).
+
+モジュール間のインタフェースは `dehs.h` 内に定義されている。
+
+TODO:
 0
 user text
 and data
@@ -546,8 +690,9 @@ user stack
 heap
 MAXVA trampoline
 trapframeFigure 2.3: Layout of a process’s virtual address space
-defs.h (kernel/defs.h).
-2.5 Process overview
+
+## Process overview
+
 The unit of isolation in xv6 (as in other Unix operating systems) is a process. The process ab-
 straction prevents one process from wrecking or spying on another process’s memory, CPU, file
 descriptors, etc. It also prevents a process from wrecking the kernel itself, so that a process can’t
