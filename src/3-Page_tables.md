@@ -338,40 +338,132 @@ The file (kernel/memlayout.h) declares the constants for xv6’s kernel memory l
 
 ファイル `kernel/memlayout.h` は xv6 のカーネルメモリレイアウトのための定数を宣言している。
 
-QEMU simulates a computer that includes RAM (physical memory) starting at physical ad-
-dress 0x80000000 and continuing through at least 0x88000000, which xv6 calls PHYSTOP.
-The QEMU simulation also includes I/O devices such as a disk interface. QEMU exposes the de-
-vice interfaces to software as memory-mapped control registers that sit below 0x80000000 in the
-physical address space. The kernel can interact with the devices by reading/writing these special
-physical addresses; such reads and writes communicate with the device hardware rather than with
-RAM. Chapter 4 explains how xv6 interacts with devices.
-The kernel gets at RAM and memory-mapped device registers using “direct mapping;” that
-is, mapping the resources at virtual addresses that are equal to the physical address. For example,
-the kernel itself is located at KERNBASE=0x80000000 in both the virtual address space and in
-physical memory. Direct mapping simplifies kernel code that reads or writes physical memory. For
-example, when fork allocates user memory for the child process, the allocator returns the physical
-address of that memory; fork uses that address directly as a virtual address when it is copying the
-parent’s user memory to the child.
+QEMU simulates a computer that includes RAM (physical memory)
+starting at physical address 0x80000000 and continuing through at least 0x88000000,
+which xv6 calls PHYSTOP.
+
+QEMU は物理アドレス 0x8000_0000 から始まり少なくとも 0x8800_0000 まで続く RAM (物理メモリ) を
+持つコンピュータをシミュレートする。
+xv6 は 0x8800_0000 を PHYSTOP と呼ぶ。
+
+The QEMU simulation also includes I/O devices such as a disk interface.
+
+QEMU のシミュレーションにはディスクインタフェースのような I/O デバイスも含まれる。
+
+QEMU exposes the device interfaces to software as memory-mapped control registers
+that sit below 0x80000000 in the physical address space.
+
+QEMU は 物理アドレス空間 0x8000_0000 以下にあるメモリマップされたコントロールレジスタとして、
+デバイスインタフェースをソフトウェアに公開している。
+
+The kernel can interact with the devices by reading/writing these special physical addresses;
+such reads and writes communicate with the device hardware rather than with RAM.
+
+カーネルはこれらの特殊な物理アドレスを読み書きすることでデバイスとやり取りすることができる。
+そのような読み書きは RAM とではなくデバイスハードウェアとの通信となる。
+
+Chapter 4 explains how xv6 interacts with devices.
+
+4章で xv6 がどのようにしてデバイスとやり取りするのかを説明する。
+
+The kernel gets at RAM and memory-mapped device registers using “direct mapping;”
+that is, mapping the resources at virtual addresses that are equal to the physical address.
+
+カーネルは「ダイレクトマッピング」を使って RAM やメモリマップトデバイスにアクセスする。
+つまり、物理アドレスと等しい仮想アドレスにリソースをマップするということである。
+
+For example, the kernel itself is located at KERNBASE=0x80000000
+in both the virtual address space and in physical memory.
+
+例えば、カーネル自身は物理メモリと仮想アドレスの両方において KERNBASE=0x8000_0000 に位置する。
+
+Direct mapping simplifies kernel code that reads or writes physical memory.
+
+ダイレクトマッピングは物理メモリを読み書きするカーネルコードを簡潔にできる。
+
+For example, when fork allocates user memory for the child process,
+the allocator returns the physical address of that memory;
+fork uses that address directly as a virtual address when it is copying the parent’s user memory to the child.
+
+例えば、fork が子プロセスのためのユーザメモリを確保する時、
+アロケータはそのメモリの物理アドレスを返す。
+fork は親のユーザメモリを子にコピーする際、アロケータの返した物理アドレスをそのまま
+仮想アドレスとして使う。
+
 There are a couple of kernel virtual addresses that aren’t direct-mapped:
-• The trampoline page. It is mapped at the top of the virtual address space; user page tables
-have this same mapping. Chapter 4 discusses the role of the trampoline page, but we see
-here an interesting use case of page tables; a physical page (holding the trampoline code) is
-mapped twice in the virtual address space of the kernel: once at top of the virtual address
-space and once with a direct mapping.
-• The kernel stack pages. Each process has its own kernel stack, which is mapped high so
-that below it xv6 can leave an unmapped guard page. The guard page’s PTE is invalid (i.e.,
-PTE_V is not set), so that if the kernel overflows a kernel stack, it will likely cause an excep-
-tion and the kernel will panic. Without a guard page an overflowing stack would overwrite
-other kernel memory, resulting in incorrect operation. A panic crash is preferable.
-While the kernel uses its stacks via the high-memory mappings, they are also accessible to the
-kernel through a direct-mapped address. An alternate design might have just the direct mapping,
-and use the stacks at the direct-mapped address. In that arrangement, however, providing guard
-pages would involve unmapping virtual addresses that would otherwise refer to physical memory,
+
+ダイレクトマップされないカーネル仮想アドレスが2つある。
+
+• The trampoline page. It is mapped at the top of the virtual address space;
+user page tables have this same mapping.
+Chapter 4 discusses the role of the trampoline page,
+but we see here an interesting use case of page tables;
+a physical page (holding the trampoline code) is mapped twice
+in the virtual address space of the kernel:
+once at top of the virtual address space and once with a direct mapping.
+• The kernel stack pages.
+Each process has its own kernel stack, which is mapped high
+so that below it xv6 can leave an unmapped guard page.
+The guard page’s PTE is invalid (i.e., PTE_V is not set),
+so that if the kernel overflows a kernel stack,
+it will likely cause an exception and the kernel will panic.
+Without a guard page an overflowing stack would overwrite other kernel memory,
+resulting in incorrect operation.
+A panic crash is preferable.
+
+* トランポリンページ。これは仮想アドレス空間の先頭にマップされる。
+ユーザページテーブルもこれと同じマッピングを持つ。
+4章でトランポリンページの役割を議論するが、ここではページテーブルの興味深い使い方を見ていく。
+1つの物理ページ (トランポリンコードを含む) はカーネルの仮想アドレス空間に二度マップされる。
+1回は仮想アドレス空間の先頭に、もう1回はダイレクトマップされる。
+* カーネルスタックページ。
+それぞれのプロセスは自身専用のカーネルスタックを持ち、上位アドレスにマップされるため、
+xv6 は 下位アドレスをアンマップ状態のガードページのままにできる。
+ガードページの PTE は無効 (つまり PTE_V がセットされない) であり、
+これによりカーネルがカーネルスタックをオーバーフローさせた時、
+例外が発生し、カーネルはパニックする可能性が高い。
+ガードページなしでオーバーフローすると他のカーネルメモリを上書きすることになり、
+不正な動作を引き起こす。
+パニックのクラッシュが望ましい。
+
+While the kernel uses its stacks via the high-memory mappings,
+they are also accessible to the kernel through a direct-mapped address.
+
+カーネルは自分のスタックを上位メモリへのマッピング経由で使用する。
+これはダイレクトマップされたアドレス経由でもアクセス可能である。
+
+An alternate design might have just the direct mapping,
+and use the stacks at the direct-mapped address.
+
+他の設計としてはダイレクトマップのみとし、ダイレクトマップされたアドレスで
+スタックを使うというのもあり得るかもしれない。
+
+In that arrangement, however, providing guard pages would involve unmapping
+virtual addresses that would otherwise refer to physical memory,
 which would then be hard to use.
-The kernel maps the pages for the trampoline and the kernel text with the permissions PTE_R
-and PTE_X. The kernel reads and executes instructions from these pages. The kernel maps the other
-pages with the permissions PTE_R and PTE_W, so that it can read and write the memory in those
-pages. The mappings for the guard pages are invalid.
+
+しかしそのやり方だと、ガードページを提供するために物理メモリを参照していた仮想アドレスを
+アンマップすることになり、その部分の物理メモリを使いづらくなってしまう。
+
+The kernel maps the pages for the trampoline and the kernel text
+with the permissions PTE_R and PTE_X.
+
+カーネルはトランポリンとカーネルテキストのためのページを
+パーミッション PTE_R と PTE_X でマップする。
+
+The kernel reads and executes instructions from these pages.
+
+カーネルはそれらのページを読んだり実行したりできる。
+
+The kernel maps the other pages with the permissions PTE_R and PTE_W,
+so that it can read and write the memory in those pages.
+
+カーネルは他のページをパーミッション PTE_R と PTE_W でマップする。
+これによりそれらのページのメモリは読み書きできる。
+
+The mappings for the guard pages are invalid.
+
+ガードページのマッピングは無効である。
 
 3.3 Code: creating an address space
 Most of the xv6 code for manipulating address spaces and page tables resides in vm.c (ker-
