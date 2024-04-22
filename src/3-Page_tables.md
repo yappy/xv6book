@@ -465,61 +465,228 @@ The mappings for the guard pages are invalid.
 
 ガードページのマッピングは無効である。
 
-3.3 Code: creating an address space
-Most of the xv6 code for manipulating address spaces and page tables resides in vm.c (ker-
-nel/vm.c:1). The central data structure is pagetable_t, which is really a pointer to a RISC-V
-35
-root page-table page; a pagetable_t may be either the kernel page table, or one of the per-
-process page tables. The central functions are walk, which finds the PTE for a virtual address,
-and mappages, which installs PTEs for new mappings. Functions starting with kvm manipulate
-the kernel page table; functions starting with uvm manipulate a user page table; other functions are
-used for both. copyout and copyin copy data to and from user virtual addresses provided as
-system call arguments; they are in vm.c because they need to explicitly translate those addresses
+## Code: creating an address space
+
+コード: アドレス空間の生成
+
+Most of the xv6 code for manipulating address spaces and page tables resides in
+vm.c (kernel/vm.c:1).
+
+アドレス空間とページテーブルの操作をする xv6 のコードの大部分は vm.c (`kernel/vm.c:1`) にある。
+
+The central data structure is pagetable_t, which is really a pointer to
+a RISC-V root page-table page;
+a pagetable_t may be either the kernel page table, or one of the per-process page tables.
+
+中心的なデータ構造は pagetable_t で、これは RISC-V ルートページテーブルページ
+そのものへのポインタである。
+pagetable_t はカーネルのページテーブルの場合もあれば、
+プロセスごとのページテーブルのうちの1つの可能性もある。
+
+The central functions are walk, which finds the PTE for a virtual address,
+and mappages, which installs PTEs for new mappings.
+
+中心的な関数は walk、これは仮想アドレスに対して PTE を求めるもので、
+それと mappages、これは PTE を新しいマッピングにインストールするものである。
+
+Functions starting with kvm manipulate the kernel page table;
+functions starting with uvm manipulate a user page table;
+other functions are used for both.
+
+kvm で始まる関数はカーネルページテーブルを操作し、
+uvm で始まる関数はユーザページテーブルを操作する。
+他の関数は両方の目的で使用される。
+
+copyout and copyin copy data to and from user virtual addresses provided as
+system call arguments;
+they are in vm.c because they need to explicitly translate those addresses
 in order to find the corresponding physical memory.
-Early in the boot sequence, main calls kvminit (kernel/vm.c:54) to create the kernel’s page ta-
-ble using kvmmake (kernel/vm.c:20). This call occurs before xv6 has enabled paging on the RISC-V,
-so addresses refer directly to physical memory. kvmmake first allocates a page of physical mem-
-ory to hold the root page-table page. Then it calls kvmmap to install the translations that the kernel
-needs. The translations include the kernel’s instructions and data, physical memory up to PHYSTOP,
-and memory ranges which are actually devices. proc_mapstacks (kernel/proc.c:33) allocates a
-kernel stack for each process. It calls kvmmap to map each stack at the virtual address generated
-by KSTACK, which leaves room for the invalid stack-guard pages.
-kvmmap (kernel/vm.c:132) calls mappages (kernel/vm.c:143), which installs mappings into a
-page table for a range of virtual addresses to a corresponding range of physical addresses. It does
-this separately for each virtual address in the range, at page intervals. For each virtual address to
-be mapped, mappages calls walk to find the address of the PTE for that address. It then initializes
-the PTE to hold the relevant physical page number, the desired permissions (PTE_W, PTE_X, and/or
-PTE_R), and PTE_V to mark the PTE as valid (kernel/vm.c:158).
-walk (kernel/vm.c:86) mimics the RISC-V paging hardware as it looks up the PTE for a virtual
-address (see Figure 3.2). walk descends the 3-level page table 9 bits at the time. It uses each
-level’s 9 bits of virtual address to find the PTE of either the next-level page table or the final page
-(kernel/vm.c:92). If the PTE isn’t valid, then the required page hasn’t yet been allocated; if the
-alloc argument is set, walk allocates a new page-table page and puts its physical address in the
-PTE. It returns the address of the PTE in the lowest layer in the tree (kernel/vm.c:102).
-The above code depends on physical memory being direct-mapped into the kernel virtual ad-
-dress space. For example, as walk descends levels of the page table, it pulls the (physical) address
-of the next-level-down page table from a PTE (kernel/vm.c:94), and then uses that address as a
-virtual address to fetch the PTE at the next level down (kernel/vm.c:92).
-main calls kvminithart (kernel/vm.c:62) to install the kernel page table. It writes the phys-
-ical address of the root page-table page into the register satp. After this the CPU will translate
-addresses using the kernel page table. Since the kernel uses an identity mapping, the now virtual
-address of the next instruction will map to the right physical memory address.
-Each RISC-V CPU caches page table entries in a Translation Look-aside Buffer (TLB), and
-when xv6 changes a page table, it must tell the CPU to invalidate corresponding cached TLB
-entries. If it didn’t, then at some point later the TLB might use an old cached mapping, point-
-ing to a physical page that in the meantime has been allocated to another process, and as a re-
-sult, a process might be able to scribble on some other process’s memory. The RISC-V has an
-instruction sfence.vma that flushes the current CPU’s TLB. Xv6 executes sfence.vma in
-kvminithart after reloading the satp register, and in the trampoline code that switches to a
-36
-user page table before returning to user space (kernel/trampoline.S:89).
-It is also necessary to issue sfence.vma before changing satp, in order to wait for comple-
-tion of all outstanding loads and stores. This wait ensures that preceding updates to the page table
-have completed, and ensures that preceding loads and stores use the old page table, not the new
-one.
-To avoid flushing the complete TLB, RISC-V CPUs may support address space identifiers
-(ASIDs) [3]. The kernel can then flush just the TLB entries for a particular address space. Xv6
-does not use this feature.
+
+copyout と copyin は、システムコールの引数として提供されたユーザ仮想アドレスに、
+またはユーザ仮想アドレスから、データをコピーする。
+それらは仮想アドレスを対応する物理アドレスに明示的に変換する必要があるため、
+vm.c の中にある。
+
+Early in the boot sequence, main calls kvminit (kernel/vm.c:54) to create
+the kernel’s page table using kvmmake (kernel/vm.c:20).
+
+ブートシーケンスの早い段階で、main は kvminit (`kernel/vm.c:54`) を、
+カーネルのページテーブルを kvmmake (`kernel/vm.c:20`) を使って作成するために呼ぶ。
+
+This call occurs before xv6 has enabled paging on the RISC-V,
+so addresses refer directly to physical memory.
+
+この呼び出しは cv6 が RISC-V のページング機能を有効にする前に行われる。
+このためアドレスは直接物理メモリを指している。
+
+kvmmake first allocates a page of physical memory to hold the root page-table page.
+
+kvmmake は初めに物理メモリの1ページをルートページテーブルページを格納するために確保する。
+
+Then it calls kvmmap to install the translations that the kernel needs.
+
+その後 kvmmap を呼んでカーネルが必要とする変換をインストールする。
+
+The translations include the kernel’s instructions and data, physical memory up to PHYSTOP,
+and memory ranges which are actually devices.
+
+この変換にはカーネルの命令とデータ、PHYSTOP までの物理メモリ、実デバイスのメモリ範囲が
+含まれる。
+
+proc_mapstacks (kernel/proc.c:33) allocates a kernel stack for each process.
+
+proc_mapstacks (`kernel/proc.c:33`) はプロセスごとのカーネルスタックを確保する。
+
+It calls kvmmap to map each stack at the virtual address generated by KSTACK,
+which leaves room for the invalid stack-guard pages.
+
+proc_mapstacks は kvmmap を呼んで KSTACK によって生成された仮想アドレスに
+それぞれのスタックをマップする。
+そこには無効なスタックガードページのための空きも残してある。
+
+kvmmap (kernel/vm.c:132) calls mappages (kernel/vm.c:143),
+which installs mappings into a page table for a range of virtual addresses
+to a corresponding range of physical addresses.
+
+kvmmap (`kernel/vm.c:132`) は mappages (`kernel/vm.c:143`) を呼ぶ。
+mappages はページテーブルに、ある範囲の仮想アドレスから対応する範囲の物理アドレスへの
+マップをインストールする。
+
+It does this separately for each virtual address in the range, at page intervals.
+
+これはページ単位で、その範囲内のそれぞれの仮想アドレスに対して行われる。
+
+For each virtual address to be mapped,
+mappages calls walk to find the address of the PTE for that address.
+
+それぞれのこれからマップされる仮想アドレスについて、
+mappages はそのアドレスの PTE のアドレスを求めるために walk を呼ぶ。
+
+It then initializes the PTE to hold the relevant physical page number,
+the desired permissions (PTE_W, PTE_X, and/or PTE_R),
+and PTE_V to mark the PTE as valid (kernel/vm.c:158).
+
+それから PTE を、関連付ける物理ページ番号、要求されたパーミッション
+(PTE_W, PTE_X, and/or PTE_R)、この PTE が有効であるとマークする PTE_V、
+を保持するように初期化する(`kernel/vm.c:158`)。
+
+walk (kernel/vm.c:86) mimics the RISC-V paging hardware
+as it looks up the PTE for a virtual address (see Figure 3.2).
+
+walk (`kernel/vm.c:86`) は RISC-V ページングハードウェアが
+仮想アドレスから PTE をルックアップするのを模倣する(図 3.2 参照)。
+
+walk descends the 3-level page table 9 bits at the time.
+
+walk は3段ページテーブルを一度に 9 bit ずつ降りていく。
+
+It uses each level’s 9 bits of virtual address to find the PTE of
+either the next-level page table or the final page (kernel/vm.c:92).
+
+そこではそれぞれのレベルの仮想アドレスの中の 9 bit を次のレベルのページテーブルまたは
+最後のページの PTE を求めるために使う。
+
+If the PTE isn’t valid, then the required page hasn’t yet been allocated;
+if the alloc argument is set, walk allocates a new page-table page and
+puts its physical address in the PTE.
+
+もし PTE が有効でなかったら、要求されたページはまだ確保されていない。
+もし alloc 引数がセットされていたら、walk は新しいページテーブルページを確保し、
+その物理アドレスを PTE の中に格納する。
+
+It returns the address of the PTE in the lowest layer in the tree (kernel/vm.c:102).
+
+walk はツリーの一番下のレイヤの PTE のアドレスを返す (`kernel/vm.c`)。
+
+The above code depends on physical memory being direct-mapped
+into the kernel virtual address space.
+
+ここまでのコードは物理メモリがカーネル仮想アドレス空間にダイレクトマップされていることに
+依存している。
+
+For example, as walk descends levels of the page table,
+it pulls the (physical) address of the next-level-down page table from a PTE (kernel/vm.c:94),
+and then uses that address as a virtual address to fetch the PTE
+at the next level down (kernel/vm.c:92).
+
+例えば、walk がページテーブルのレベルを下りていく際、
+次の下のレベルの ページテーブルの (物理) アドレスを PTE から引いてくる (`kernel/vm.c:94`)。
+そしてそのアドレスを仮想アドレスとして使用し次の下のレベルの PTE を取得する (`kernel/vm.c:92`)。
+
+main calls kvminithart (kernel/vm.c:62) to install the kernel page table.
+
+main は kvminithart (`kernel/vm.c:62`) をカーネルページテーブルを準備するために呼ぶ。
+
+It writes the physical address of the root page-table page into the register satp.
+
+kvminithart はルートページテーブルページの物理アドレスをレジスタ satp に書き込む。
+
+After this the CPU will translate addresses using the kernel page table.
+
+この後、CPU はカーネルページテーブルを使ってアドレスを変換するようになる。
+
+Since the kernel uses an identity mapping,
+the now virtual address of the next instruction will map to the right physical memory address.
+
+カーネルは同一マッピングを使っているので、次の命令の仮想アドレスは
+正しい物理メモリアドレスにマップされる。
+
+Each RISC-V CPU caches page table entries in a Translation Look-aside Buffer (TLB),
+and when xv6 changes a page table, it must tell the CPU to invalidate
+corresponding cached TLB entries.
+
+それぞれの RISC-V CPU はページテーブルエントリを Translation Look-aside Buffer (TLB) に
+キャッシュする。xv6 がページテーブルを変更した時、対応する TLB エントリを
+無効化 (invalidate) するよう CPU に伝えなければならない。
+
+If it didn’t, then at some point later the TLB might use an old cached mapping,
+pointing to a physical page that in the meantime has been allocated to another process,
+and as a result, a process might be able to scribble on some other process’s memory.
+
+もしそうしなかったなら、その後あるところで TLB が古いキャッシュされたマッピングを使ってしまい、
+その古いマッピングの指す物理ページがその間に他のプロセスに確保され、
+その結果、あるプロセスが他のプロセスのメモリを書き壊してしまう可能性がある。
+
+The RISC-V has an instruction sfence.vma that flushes the current CPU’s TLB.
+
+RISC-V は現在の CPU の TLB をフラッシュする sfence.vma 命令を持つ。
+
+Xv6 executes sfence.vma in kvminithart after reloading the satp register,
+and in the trampoline code that switches to a user page table
+before returning to user space (kernel/trampoline.S:89).
+
+xv6 は kvminithart 内で satp を書き換えた後と、
+ユーザページテーブルへ切り替えるトランポリンコード内でユーザ空間へ戻る前に
+sfence.vma を実行する。
+
+It is also necessary to issue sfence.vma before changing satp,
+in order to wait for completion of all outstanding loads and stores.
+
+satp を書き換える前にも、未完了のロードやストアが完了するまで待つために
+sfence.vma を発行する必要がある。
+(注: satp の設定命令より上にあるメモリアクセス命令がアウトオブオーダ実行によって
+satp の変更より前に完了してしまうと、新しい変換テーブルでメモリアクセスが
+行われてしまう可能性がある。おそらくどこかで似たような話を後述。)
+
+This wait ensures that preceding updates to the page table have completed,
+and ensures that preceding loads and stores use the old page table, not the new one.
+
+この待機命令はこれより前のページテーブルの更新が完了したことを保証し、
+これより前のロードやストア命令が新しいものではなく古いページテーブルを使用することを保証する。
+
+To avoid flushing the complete TLB,
+RISC-V CPUs may support address space identifiers (ASIDs) [3].
+
+全 TLB のフラッシュを避けるため、RISC-V CPU はアドレス空間 ID (ASID) をサポートする場合がある。
+
+The kernel can then flush just the TLB entries for a particular address space.
+
+カーネルは特定のアドレス空間の TLB エントリのみをフラッシュすることができる。
+
+Xv6 does not use this feature.
+
+xv6 はこの機能を使用していない。
+
 3.4 Physical memory allocation
 The kernel must allocate and free physical memory at run-time for page tables, user memory,
 kernel stacks, and pipe buffers.
