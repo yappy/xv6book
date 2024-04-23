@@ -837,60 +837,192 @@ kalloc はフリーリストの先頭の要素を削除して返す。
 
 ## Process address space
 
-Each process has a separate page table, and when xv6 switches between processes, it also changes
-page tables. Figure 3.4 shows a process’s address space in more detail than Figure 2.3. A process’s
-user memory starts at virtual address zero and can grow up to MAXVA (kernel/riscv.h:360), allowing
-a process to address in principle 256 Gigabytes of memory.
-A process’s address space consists of pages that contain the text of the program (which xv6
-maps with the permissions PTE_R, PTE_X, and PTE_U), pages that contain the pre-initialized data
-of the program, a page for the stack, and pages for the heap. Xv6 maps the data, stack, and heap
-with the permissions PTE_R, PTE_W, and PTE_U.
+Each process has a separate page table, and when xv6 switches between processes,
+it also changes page tables.
+
+各プロセスは別々のページテーブルを持ち、xv6 がプロセス間を切り替えた時、
+ページテーブルも同時に切り替える。
+
+Figure 3.4 shows a process’s address space in more detail than Figure 2.3.
+
+図 3.4 に図 2.3 よりも詳細なプロセスアドレス空間の様子を示す。
+
+A process’s user memory starts at virtual address zero and can grow up to MAXVA
+(kernel/riscv.h:360), allowing a process to address in principle 256 Gigabytes of memory.
+
+プロセスのユーザメモリは仮想アドレスのゼロから始まり、MAXVA (`kernel/riscv.h:80`) まで
+伸び、プロセスは基本的に 256 GiB までのメモリをアドレス指定できる。
+
+A process’s address space consists of pages that contain the text of the program
+(which xv6 maps with the permissions PTE_R, PTE_X, and PTE_U),
+pages that contain the pre-initialized data of the program,
+a page for the stack, and pages for the heap.
+
+プロセスのアドレス空間はそのプログラムのテキスト領域を含むページ
+(xv6 はこれをパーミッション PTE_R, PTE_X, PTE_U でマップする)、
+そのプログラムの前もって初期化されたデータ領域を持つページ、
+スタックのためのページ、ヒープのためのページからなる。
+
+Xv6 maps the data, stack, and heap with the permissions PTE_R, PTE_W, and PTE_U.
+
+xv6 はデータ、スタック、ヒープをパーミッション PTE_R, PTE_W, PTE_U でマップする。
+
 Using permissions within a user address space is a common technique to harden a user process.
-If the text were mapped with PTE_W, then a process could accidentally modify its own program;
-for example, a programming error may cause the program to write to a null pointer, modifying
-instructions at address 0, and then continue running, perhaps creating more havoc. To detect such
-errors immediately, xv6 maps the text without PTE_W; if a program accidentally attempts to store
-to address 0, the hardware will refuse to execute the store and raises a page fault (see Section 4.6).
-The kernel then kills the process and prints out an informative message so that the developer can
-track down the problem.
-Similarly, by mapping data without PTE_X, a user program cannot accidentally jump to an
-address in the program’s data and start executing at that address.
-In the real world, hardening a process by setting permissions carefully also aids in defending
-against security attacks. An adversary may feed carefully-constructed input to a program (e.g., a
-Web server) that triggers a bug in the program in the hope of turning that bug into an exploit [14].
-Setting permissions carefully and other techniques, such as randomizing of the layout of the user
-address space, make such attacks harder.
-The stack is a single page, and is shown with the initial contents as created by exec. Strings
-containing the command-line arguments, as well as an array of pointers to them, are at the very
-top of the stack. Just under that are values that allow a program to start at main as if the function
-main(argc, argv) had just been called.
-To detect a user stack overflowing the allocated stack memory, xv6 places an inaccessible guard
-page right below the stack by clearing the PTE_U flag. If the user stack overflows and the process
-tries to use an address below the stack, the hardware will generate a page-fault exception because
-the guard page is inaccessible to a program running in user mode. A real-world operating system
-might instead automatically allocate more memory for the user stack when it overflows.
-When a process asks xv6 for more user memory, xv6 grows the process’s heap. Xv6 first uses
-kalloc to allocate physical pages. It then adds PTEs to the process’s page table that point to the
-new physical pages. Xv6 sets the PTE_W, PTE_R, PTE_U, and PTE_V flags in these PTEs. Most
-processes do not use the entire user address space; xv6 leaves PTE_V clear in unused PTEs.
-We see here a few nice examples of use of page tables. First, different processes’ page tables
-translate user addresses to different pages of physical memory, so that each process has private user
-memory. Second, each process sees its memory as having contiguous virtual addresses starting at
-zero, while the process’s physical memory can be non-contiguous. Third, the kernel maps a page
-with trampoline code at the top of the user address space (without PTE_U), thus a single page of
-physical memory shows up in all address spaces, but can be used only by the kernel.
+
+ユーザアドレス空間にパーミッションを使うのは、ユーザプロセスを堅牢化する一般的な技法である。
+
+If the text were mapped with PTE_W,
+then a process could accidentally modify its own program;
+for example, a programming error may cause the program to write to a null pointer,
+modifying instructions at address 0, and then continue running,
+perhaps creating more havoc.
+
+もしテキスト領域が PTE_W でマップされていたら、
+プロセスは誤って自分自身のプログラムを書き換えてしまう可能性がある。
+例えば、プログラミング上の誤りによりプログラムがヌルポインタに書き込んでしまい、
+アドレス 0 の命令が変更され、実行が続き、おそらくさらなる大混乱が起こるだろう。
+
+To detect such errors immediately, xv6 maps the text without PTE_W;
+if a program accidentally attempts to store to address 0,
+the hardware will refuse to execute the store and raises a page fault (see Section 4.6).
+
+そのようなエラーを即座に検出するために、xv6 はテキスト領域を PTE_W なしでマップする。
+もしプログラムが誤ってアドレス 0 に書き込もうとしたら、ハードウェアはストアの実行を拒否して
+ページフォールトを発生させるだろう (4.6 節参照)。
+
+The kernel then kills the process and prints out an informative message
+so that the developer can track down the problem.
+
+カーネルはプロセスを kill し、開発者が問題を見つけられるように情報メッセージを出力する。
+
+Similarly, by mapping data without PTE_X, a user program cannot accidentally jump to
+an address in the program’s data and start executing at that address.
+
+同様に、PTE_X なしでマップすることにより、ユーザプログラムは誤ってデータ領域内のアドレスに
+ジャンプしそのアドレスから実行を始めるということがない。
+
+In the real world, hardening a process by setting permissions carefully also aids in
+defending against security attacks.
+
+現実世界では、プロセスをパーミッションを注意深く設定することによって堅牢にすることには
+セキュリティ攻撃に対して防御するという目的もある。
+
+An adversary may feed carefully-constructed input to a program (e.g., a Web server)
+that triggers a bug in the program in the hope of turning that bug into an exploit [14].
+
+攻撃者はプログラム中のバグを引き起こすような入念に構築された入力を
+プログラム (例: ウェブサーバ) に送り込み、
+そのバグがエクスプロイトになるのを狙ってくるかもしれない。
+
+Setting permissions carefully and other techniques,
+such as randomizing of the layout of the user address space,
+make such attacks harder.
+
+パーミッションを注意深く設定するのと、ユーザアドレス空間のレイアウトのランダマイズのような
+その他の技術はそのような攻撃を難しくする。
+
+The stack is a single page, and is shown with the initial contents as created by exec.
+
+スタックは1つのページで、exec によって生成された初期データが入って見える。
+
+Strings containing the command-line arguments, as well as an array of pointers to them,
+are at the very top of the stack.
+
+コマンドライン引数を格納している文字列と、それらへのポインタの配列が、
+スタックの一番上に置かれる。
+
+Just under that are values that allow a program to start at main
+as if the function main(argc, argv) had just been called.
+
+そのすぐ下は、関数 main(argc. argv) がちょうど呼ばれたかのように
+プログラムが main から始まるようにするための値が置かれる。
+
+To detect a user stack overflowing the allocated stack memory,
+xv6 places an inaccessible guard page right below the stack by clearing the PTE_U flag.
+
+ユーザスタックが、確保されたスタックメモリをオーバーフローしたのを検出するため、
+xv6 はア PTE_U フラグをクリアしてアクセス不能にしたガードページをスタックのすぐ下に配置する。
+
+If the user stack overflows and the process tries to use an address below the stack,
+the hardware will generate a page-fault exception
+because the guard page is inaccessible to a program running in user mode.
+
+もしユーザスタックがオーバーフローしてプロセスがスタックの下のアドレスを使おうとした場合、
+ハードウェアはページフォールト例外を生成する。
+なぜならガードページはユーザモードで実行されているプログラムからはアクセス不能だからだ。
+
+A real-world operating system might instead automatically allocate more memory
+for the user stack when it overflows.
+
+現実世界のオペレーティングシステムはスタックがオーバーフローした時、
+代わりに自動的に追加のメモリを確保するかもしれない。
+
+When a process asks xv6 for more user memory, xv6 grows the process’s heap.
+
+プロセスが xv6 にさらなるユーザメモリを要求した時、xv6 はプロセスのヒープを拡張する。
+
+Xv6 first uses kalloc to allocate physical pages.
+
+xv6 は最初に kalloc を使って物理ページを確保する。
+
+It then adds PTEs to the process’s page table that point to the new physical pages.
+
+次に新しい物理ページを指す PTE をそのプロセスのページテーブルに追加する。
+
+Xv6 sets the PTE_W, PTE_R, PTE_U, and PTE_V flags in these PTEs.
+
+xv6 はそれらの PTE 内に PTE_W, PTE_R, PTE_U, PTE_V を設定する。
+
+Most processes do not use the entire user address space;
+xv6 leaves PTE_V clear in unused PTEs.
+
+ほとんどのプロセスはユーザアドレス空間全体を使うことはない。
+xv6 は使われていない PTE 内の PTE_V をクリア状態のままにする。
+
+We see here a few nice examples of use of page tables.
+
+ここで、いくつかのページテーブルの使い方の良い例を見られる。
+
+First, different processes’ page tables translate user addresses to
+different pages of physical memory, so that each process has private user memory.
+
+初めに、異なるプロセスのページテーブルはユーザアドレスを異なる物理メモリのページに変換する。
+これにより各プロセスはプライベートなユーザメモリを持つことができる。
+
+Second, each process sees its memory as having contiguous virtual addresses starting at zero,
+while the process’s physical memory can be non-contiguous.
+
+第二に、各プロセスからは自分のメモリがゼロから始まる連続した仮想アドレスを持っているように見える。
+プロセスの物理メモリは非連続かもしれないながら。
+
+Third, the kernel maps a page with trampoline code at the top of
+the user address space (without PTE_U), thus a single page of physical memory
+shows up in all address spaces, but can be used only by the kernel.
+
+第三に、カーネルはトランポリンコードが入った1つのページをユーザアドレス空間の先頭に
+(PTE_U フラグなしで) マップする。
+したがって物理メモリ中の1ページが全てのアドレス空間に現れるが、
+カーネルからしか使用できない。
 
 ## Code: sbrk
 
-sbrk is the system call for a process to shrink or grow its memory. The system call is implemented
-by the function growproc (kernel/proc.c:260). growproc calls uvmalloc or uvmdealloc, de-
-pending on whether n is positive or negative. uvmalloc (kernel/vm.c:226) allocates physical mem-
-ory with kalloc, and adds PTEs to the user page table with mappages. uvmdealloc calls
-uvmunmap (kernel/vm.c:171), which uses walk to find PTEs and kfree to free the physical
-memory they refer to.
+sbrk is the system call for a process to shrink or grow its memory.
+
+The system call is implemented by the function growproc (kernel/proc.c:260).
+
+growproc calls uvmalloc or uvmdealloc, depending on whether n is positive or negative.
+
+uvmalloc (kernel/vm.c:226) allocates physical memory with kalloc,
+and adds PTEs to the user page table with mappages.
+
+uvmdealloc calls uvmunmap (kernel/vm.c:171), which uses walk to find PTEs and
+kfree to free the physical memory they refer to.
+
 Xv6 uses a process’s page table not just to tell the hardware how to map user virtual addresses,
-but also as the only record of which physical memory pages are allocated to that process. That is
-the reason why freeing user memory (in uvmunmap) requires examination of the user page table.
+but also as the only record of which physical memory pages are allocated to that process.
+
+That is the reason why freeing user memory (in uvmunmap) requires
+examination of the user page table.
 
 ## Code: exec
 
