@@ -809,12 +809,31 @@ The other reason is that freeing and allocation inherently change the type of th
 
 もう1つの理由は解放と確保がメモリの型を本質的に変えてしまうからだ。
 
-The function kfree (kernel/kalloc.c:47) begins by setting every byte in the memory being freed
-to the value 1. This will cause code that uses memory after freeing it (uses “dangling references”)
-to read garbage instead of the old valid contents; hopefully that will cause such code to break faster.
-Then kfree prepends the page to the free list: it casts pa to a pointer to struct run, records the
-old start of the free list in r->next, and sets the free list equal to r. kalloc removes and returns
-the first element in the free list.
+The function kfree (kernel/kalloc.c:47) begins by setting every byte
+in the memory being freed to the value 1.
+
+関数 kfree (`kernel/kalloc.c:47`) は解放しようとするメモリのすべてのバイトを
+まず1で埋める。
+
+This will cause code that uses memory after freeing it (uses “dangling references”)
+to read garbage instead of the old valid contents;
+hopefully that will cause such code to break faster.
+
+これにより解放後のメモリを使った (「ダングリング参照」を使った) コードは
+古い有効な値ではなくゴミが読めるようになる。
+これによりそのようなコードは早めに壊れてくれると嬉しい。
+
+Then kfree prepends the page to the free list: it casts pa to a pointer to struct run,
+records the old start of the free list in r->next, and sets the free list equal to r.
+
+次に kfree はページをフリーリストにつなぐ準備をする。
+`pa` を `struct run` へのポインタにキャストし、`r->next` に元のフリーリストの始点を保存し、
+フリーリストを r に等しくする。
+(注: リンクリストの先頭に要素を追加しているだけである。)
+
+kalloc removes and returns the first element in the free list.
+
+kalloc はフリーリストの先頭の要素を削除して返す。
 
 ## Process address space
 
