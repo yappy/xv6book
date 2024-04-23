@@ -687,42 +687,137 @@ Xv6 does not use this feature.
 
 xv6 はこの機能を使用していない。
 
-3.4 Physical memory allocation
-The kernel must allocate and free physical memory at run-time for page tables, user memory,
-kernel stacks, and pipe buffers.
-Xv6 uses the physical memory between the end of the kernel and PHYSTOP for run-time alloca-
-tion. It allocates and frees whole 4096-byte pages at a time. It keeps track of which pages are free
-by threading a linked list through the pages themselves. Allocation consists of removing a page
-from the linked list; freeing consists of adding the freed page to the list.
-3.5 Code: Physical memory allocator
-The allocator resides in kalloc.c (kernel/kalloc.c:1). The allocator’s data structure is a free list
-of physical memory pages that are available for allocation. Each free page’s list element is a
-struct run (kernel/kalloc.c:17). Where does the allocator get the memory to hold that data struc-
-ture? It store each free page’s run structure in the free page itself, since there’s nothing else stored
-there. The free list is protected by a spin lock (kernel/kalloc.c:21-24). The list and the lock are
-wrapped in a struct to make clear that the lock protects the fields in the struct. For now, ignore the
-lock and the calls to acquire and release; Chapter 6 will examine locking in detail.
-The function main calls kinit to initialize the allocator (kernel/kalloc.c:27). kinit initializes
-the free list to hold every page between the end of the kernel and PHYSTOP. Xv6 ought to de-
-termine how much physical memory is available by parsing configuration information provided
-by the hardware. Instead xv6 assumes that the machine has 128 megabytes of RAM. kinit calls
-freerange to add memory to the free list via per-page calls to kfree. A PTE can only refer to
-a physical address that is aligned on a 4096-byte boundary (is a multiple of 4096), so freerange
-uses PGROUNDUP to ensure that it frees only aligned physical addresses. The allocator starts with
-no memory; these calls to kfree give it some to manage.
+## Physical memory allocation
+
+物理メモリのアロケーション
+
+The kernel must allocate and free physical memory at run-time for page tables,
+user memory, kernel stacks, and pipe buffers.
+
+カーネルは実行時にページテーブル、ユーザメモリ、カーネルスタック、パイプバッファのために
+物理メモリを確保しなければならない。
+
+Xv6 uses the physical memory between the end of the kernel and PHYSTOP for run-time allocation.
+
+xv6 はカーネルの終わりから PHYSTOP までの間の物理メモリを実行時アロケーションのために用いる。
+
+It allocates and frees whole 4096-byte pages at a time.
+
+xv6 は 4096 byte のページ全体を一度に確保または解放する。
+
+It keeps track of which pages are free by threading a linked list through the pages themselves.
+
+xv6 はどのページがフリーなのかをページ自身でリンクリストをつなぐことによって管理する。
+
+Allocation consists of removing a page from the linked list;
+freeing consists of adding the freed page to the list.
+
+アロケーションはリンクリストからページを削除することによって行う。
+解放はページをリストに追加することによって行う。
+
+## Code: Physical memory allocator
+
+コード: 物理メモリアロケータ
+
+The allocator resides in kalloc.c (kernel/kalloc.c:1).
+
+アロケータは kalloc.c にある (`kernel/kalloc.c:1`)。
+
+The allocator’s data structure is a free list of physical memory pages that are available for allocation.
+
+アロケータのデータ構造はアロケートに使用可能な物理メモリページのフリーリストである。
+
+Each free page’s list element is a struct run (kernel/kalloc.c:17).
+
+フリーページリストのそれぞれの要素は struct run である (`kernel/kalloc.c:17`)。
+
+Where does the allocator get the memory to hold that data structure?
+
+アロケータはそのデータ構造をメモリのどこに持たせるのだろうか？
+
+It store each free page’s run structure in the free page itself,
+since there’s nothing else stored there.
+
+フリーページの struct run 構造体をフリーページ自身に格納する。
+なぜならそこには他に何も格納されていないからである。
+
+The free list is protected by a spin lock (kernel/kalloc.c:21-24).
+
+フリーリストはスピンロックで守られている (`kernel/kalloc.c:21-24`)。
+
+The list and the lock are wrapped in a struct to make clear that
+the lock protects the fields in the struct.
+
+リストとロックはロックが構造体のフィールドを保護していることを明確にするため、
+1つの構造体にまとめられている。
+
+For now, ignore the lock and the calls to acquire and release;
+Chapter 6 will examine locking in detail.
+
+今のところは、ロックと acquire と release の呼び出しについては無視する。
+6章でロックについて詳しく説明する。
+
+The function main calls kinit to initialize the allocator (kernel/kalloc.c:27).
+
+main 関数は kinit を呼んでアロケータを初期化する (`kernel/kalloc.c:27`)。
+
+kinit initializes the free list to hold every page between the end of the kernel and PHYSTOP.
+
+kinit はフリーリストを初期化しカーネルの終わりから PHYSTOP までの間のすべてのページを
+保持するようにする。
+
+Xv6 ought to determine how much physical memory is available
+by parsing configuration information provided by the hardware.
+
+xv6 はどのくらいの量の物理メモリが利用可能なのかをハードウェアから提供される
+構成情報をパースすることによって判定すべきである。
+
+Instead xv6 assumes that the machine has 128 megabytes of RAM.
+
+代わりに xv6 はマシンが 128 MiB の RAM を持っていると仮定する。
+
+kinit calls freerange to add memory to the free list via per-page calls to kfree.
+
+kinit freerange を呼んで、kfree をページごとに呼ぶことによりメモリをフリーリストに追加する。
+
+A PTE can only refer to a physical address that is aligned on a 4096-byte boundary
+(is a multiple of 4096), so freerange uses PGROUNDUP to ensure that
+it frees only aligned physical addresses.
+
+PTE は 4096 byte 境界にアラインされた (4096 の倍数である) 物理アドレスとか参照することができない。
+よって freerange は PGROUNDUP (注: PaGe Round Up) を使って
+アラインされた物理アドレスのみを解放することを保証する。
+
+The allocator starts with no memory; these calls to kfree give it some to manage.
+
+アロケータはメモリなしから開始し、これらの kfree の呼び出しで何らかのメモリを管理し始める。
+
 The allocator sometimes treats addresses as integers in order to perform arithmetic on them
-(e.g., traversing all pages in freerange), and sometimes uses addresses as pointers to read and
-write memory (e.g., manipulating the run structure stored in each page); this dual use of addresses
-is the main reason that the allocator code is full of C type casts. The other reason is that freeing
-and allocation inherently change the type of the memory.
-37
+(e.g., traversing all pages in freerange),
+and sometimes uses addresses as pointers to read and write memory
+(e.g., manipulating the run structure stored in each page);
+this dual use of addresses is the main reason that the allocator code is full of C type casts.
+
+アロケータは時々、算術演算を行うためにアドレスを整数として扱うことがある
+(例: freetange ですべてのページを辿る)。
+そしてまた時々、メモリを読み書きするためにアドレスをポインタとして扱うことがある
+(例: 各ページに格納されている struct run 構造体を操作する)。
+このアドレスに対する2種類の使用法が、アロケータのコードが C の型キャストだらけになっている
+主な理由である。
+
+The other reason is that freeing and allocation inherently change the type of the memory.
+
+もう1つの理由は解放と確保がメモリの型を本質的に変えてしまうからだ。
+
 The function kfree (kernel/kalloc.c:47) begins by setting every byte in the memory being freed
 to the value 1. This will cause code that uses memory after freeing it (uses “dangling references”)
 to read garbage instead of the old valid contents; hopefully that will cause such code to break faster.
 Then kfree prepends the page to the free list: it casts pa to a pointer to struct run, records the
 old start of the free list in r->next, and sets the free list equal to r. kalloc removes and returns
 the first element in the free list.
-3.6 Process address space
+
+## Process address space
+
 Each process has a separate page table, and when xv6 switches between processes, it also changes
 page tables. Figure 3.4 shows a process’s address space in more detail than Figure 2.3. A process’s
 user memory starts at virtual address zero and can grow up to MAXVA (kernel/riscv.h:360), allowing
@@ -765,7 +860,9 @@ memory. Second, each process sees its memory as having contiguous virtual addres
 zero, while the process’s physical memory can be non-contiguous. Third, the kernel maps a page
 with trampoline code at the top of the user address space (without PTE_U), thus a single page of
 physical memory shows up in all address spaces, but can be used only by the kernel.
-3.7 Code: sbrk
+
+## Code: sbrk
+
 sbrk is the system call for a process to shrink or grow its memory. The system call is implemented
 by the function growproc (kernel/proc.c:260). growproc calls uvmalloc or uvmdealloc, de-
 pending on whether n is positive or negative. uvmalloc (kernel/vm.c:226) allocates physical mem-
@@ -775,8 +872,9 @@ memory they refer to.
 Xv6 uses a process’s page table not just to tell the hardware how to map user virtual addresses,
 but also as the only record of which physical memory pages are allocated to that process. That is
 the reason why freeing user memory (in uvmunmap) requires examination of the user page table.
-39
-3.8 Code: exec
+
+## Code: exec
+
 exec is a system call that replaces a process’s user address space with data read from a file, called
 a binary or executable file. A binary is typically the output of the compiler and linker, and holds
 machine instructions and program data. exec (kernel/exec.c:23) opens the named binary path using
