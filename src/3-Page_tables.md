@@ -1006,142 +1006,432 @@ shows up in all address spaces, but can be used only by the kernel.
 
 ## Code: sbrk
 
+コード: sbrk
+
 sbrk is the system call for a process to shrink or grow its memory.
+
+sbrk はプロセスが自身のメモリを小さくしたり大きくしたりするためのシステムコールである。
 
 The system call is implemented by the function growproc (kernel/proc.c:260).
 
+このシステムコールは growproc 関数 に実装されている (`kernel/proc.c:260`)。
+
 growproc calls uvmalloc or uvmdealloc, depending on whether n is positive or negative.
+
+growproc は uvmalloc または uvmdealloc を、n が正か負かに応じて呼ぶ。
 
 uvmalloc (kernel/vm.c:226) allocates physical memory with kalloc,
 and adds PTEs to the user page table with mappages.
 
+uvmalloc (`kernel/vm.c:226`) は kalloc で物理メモリを確保し、
+PTE をユーザページテーブルにマッピングと共に追加する。
+
 uvmdealloc calls uvmunmap (kernel/vm.c:171), which uses walk to find PTEs and
 kfree to free the physical memory they refer to.
+
+uvmdealloc は uvmunmap (`kernel/vm.c:171`) を呼び、uvmunmap は walk を使って
+PTE を求め、kfree を使って参照されていた物理メモリを解放する。
 
 Xv6 uses a process’s page table not just to tell the hardware how to map user virtual addresses,
 but also as the only record of which physical memory pages are allocated to that process.
 
+xv6 はプロセスのページテーブルをハードウェアにユーザ仮想アドレスをどのようにマップするかを
+教えるだけでなく、どの物理メモリページがそのプロセスのために確保されているかの
+唯一の記録としても使う。
+
 That is the reason why freeing user memory (in uvmunmap) requires
 examination of the user page table.
 
+これがユーザメモリの解放 (uvmunmap) 内でユーザページテーブルを調べる必要がある理由である。
+
 ## Code: exec
 
-exec is a system call that replaces a process’s user address space with data read from a file, called
-a binary or executable file. A binary is typically the output of the compiler and linker, and holds
-machine instructions and program data. exec (kernel/exec.c:23) opens the named binary path using
-namei (kernel/exec.c:36), which is explained in Chapter 8. Then, it reads the ELF header. Xv6
-binaries are formatted in the widely-used ELF format, defined in (kernel/elf.h). An ELF binary
-consists of an ELF header, struct elfhdr (kernel/elf.h:6), followed by a sequence of program
-section headers, struct proghdr (kernel/elf.h:25). Each progvhdr describes a section of the
-application that must be loaded into memory; xv6 programs have two program section headers:
+コード: exec
+
+exec is a system call that replaces a process’s user address space with data read from a file,
+called a binary or executable file.
+
+exec はプロセスのユーザアドレス空間をファイルから読んだデータで置き換えるシステムコールである。
+そのファイルはバイナリまたは実行可能ファイルと呼ばれる。
+
+A binary is typically the output of the compiler and linker,
+and holds machine instructions and program data.
+
+バイナリは通常コンパイラとリンカの出力であり、機械語命令とプログラムデータが含まれる。
+
+exec (kernel/exec.c:23) opens the named binary path using namei (kernel/exec.c:36),
+which is explained in Chapter 8.
+
+exec (`kernel/exec.c:23`) は名前の付いたバイナリのパスを namei (`kernel/exec.c:36`) を
+使ってオープンする。
+namei については8章で説明する。
+
+Then, it reads the ELF header.
+
+次に、ELF ヘッダを読む。
+
+Xv6 binaries are formatted in the widely-used ELF format, defined in (kernel/elf.h).
+
+xv6 バイナリは広く使われている ELF フォーマットでフォーマットされており、
+`kernel/elh.f` で定義されている。
+
+An ELF binary consists of an ELF header, struct elfhdr (kernel/elf.h:6),
+followed by a sequence of program section headers, struct proghdr (kernel/elf.h:25).
+
+ELF バイナリは ELF ヘッダ struct elfhdr (`kernel/elf.h:6`)、
+続いてプログラムセクションヘッダ struct proghdr (`kernel/elf.h`) の列からなる。
+
+Each progvhdr describes a section of the application that must be loaded into memory;
+xv6 programs have two program section headers:
 one for instructions and one for data.
-The first step is a quick check that the file probably contains an ELF binary. An ELF binary
-starts with the four-byte “magic number” 0x7F, ‘E’, ‘L’, ‘F’, or ELF_MAGIC (kernel/elf.h:3). If
-the ELF header has the right magic number, exec assumes that the binary is well-formed.
+
+それぞれの proghdr はメモリにロードしなければならないアプリケーションのセクションを記述する。
+xv6 プログラムは2つのプログラムセクションヘッダを持つ。
+1つは命令でもう1つはデータである。
+
+The first step is a quick check that the file probably contains an ELF binary.
+
+An ELF binary starts with the four-byte “magic number” 0x7F, ‘E’, ‘L’, ‘F’,
+or ELF_MAGIC (kernel/elf.h:3).
+
+ELF バイナリは4バイトの「マジックナンバー」0x7F, 'E', 'L', 'F'、
+つまり ELF_MAGIC (`kernel/elf.h:3`) で始まる。
+
+If the ELF header has the right magic number, exec assumes that the binary is well-formed.
+
+もし ELF ヘッダが正しいマジックナンバーを持っていたら、exe はそのバイナリが
+正しい形式であると仮定する。
+
 exec allocates a new page table with no user mappings with proc_pagetable (kernel/exec.c:49),
 allocates memory for each ELF segment with uvmalloc (kernel/exec.c:65), and loads each segment
-into memory with loadseg (kernel/exec.c:10). loadseg uses walkaddr to find the physical ad-
-dress of the allocated memory at which to write each page of the ELF segment, and readi to read
-from the file.
-The program section header for /init, the first user program created with exec, looks like
-this:
+into memory with loadseg (kernel/exec.c:10).
+
+exec はユーザマッピングのない新しいページテーブルを proc_pagetable (`kernel/exec.c:49`) で
+確保し、それぞれの ELF セグメントを uvmalloc (`kernel/exec.c:65`) で確保し、
+それぞれのセグメントをメモリへ loadseg (`kernel/exec.c:10`) でロードする。
+
+loadseg uses walkaddr to find the physical address of the allocated memory
+at which to write each page of the ELF segment, and readi to read from the file.
+
+loadseg は walkaddr を使って ELF セグメントのそれぞれのページを書き込む先である
+確保されたメモリの物理アドレスを求める。
+
+The program section header for /init, the first user program created with exec,
+looks like this:
+
+/init のプログラムセクションヘッダは次のようになっている。
+/init は exec で生成される最初のユーザプログラムである。
 
 ```text
 # objdump -p user/_init
+
 user/_init: file format elf64-little
+
 Program Header:
 0x70000003 off 0x0000000000006bb0 vaddr 0x0000000000000000
 paddr 0x0000000000000000 align 2**0
 filesz 0x000000000000004a memsz 0x0000000000000000 flags r--
+
 LOAD off 0x0000000000001000 vaddr 0x0000000000000000
 paddr 0x0000000000000000 align 2**12
 filesz 0x0000000000001000 memsz 0x0000000000001000 flags r-x
+
 LOAD off 0x0000000000002000 vaddr 0x0000000000001000
 paddr 0x0000000000001000 align 2**12
 filesz 0x0000000000000010 memsz 0x0000000000000030 flags rw-
+
 STACK off 0x0000000000000000 vaddr 0x0000000000000000
 paddr 0x0000000000000000 align 2**4
 filesz 0x0000000000000000 memsz 0x0000000000000000 flags rw-
 ```
 
-We see that the text segment should be loaded at virtual address 0x0 in memory (without write
-permissions) from content at offset 0x1000 in the file. We also see that the data should be loaded
-at address 0x1000, which is at a page boundary, and without executable permissions.
-A program section header’s filesz may be less than the memsz, indicating that the gap be-
-tween them should be filled with zeroes (for C global variables) rather than read from the file. For
-/init, the data filesz is 0x10 bytes and memsz is 0x30 bytes, and thus uvmalloc allocates
-enough physical memory to hold 0x30 bytes, but reads only 0x10 bytes from the file /init.
-40
-Now exec allocates and initializes the user stack. It allocates just one stack page. exec copies
-the argument strings to the top of the stack one at a time, recording the pointers to them in ustack.
-It places a null pointer at the end of what will be the argv list passed to main. The first three entries
-in ustack are the fake return program counter, argc, and argv pointer.
-exec places an inaccessible page just below the stack page, so that programs that try to use
-more than one page will fault. This inaccessible page also allows exec to deal with arguments
-that are too large; in that situation, the copyout (kernel/vm.c:352) function that exec uses to copy
-arguments to the stack will notice that the destination page is not accessible, and will return -1.
-During the preparation of the new memory image, if exec detects an error like an invalid
-program segment, it jumps to the label bad, frees the new image, and returns -1. exec must wait
-to free the old image until it is sure that the system call will succeed: if the old image is gone, the
-system call cannot return -1 to it. The only error cases in exec happen during the creation of the
-image. Once the image is complete, exec can commit to the new page table (kernel/exec.c:125) and
-free the old one (kernel/exec.c:129).
-exec loads bytes from the ELF file into memory at addresses specified by the ELF file. Users
-or processes can place whatever addresses they want into an ELF file. Thus exec is risky, because
-the addresses in the ELF file may refer to the kernel, accidentally or on purpose. The consequences
-for an unwary kernel could range from a crash to a malicious subversion of the kernel’s isolation
-mechanisms (i.e., a security exploit). Xv6 performs a number of checks to avoid these risks. For
-example if(ph.vaddr + ph.memsz < ph.vaddr) checks for whether the sum overflows a
-64-bit integer. The danger is that a user could construct an ELF binary with a ph.vaddr that
-points to a user-chosen address, and ph.memsz large enough that the sum overflows to 0x1000,
-which will look like a valid value. In an older version of xv6 in which the user address space also
-contained the kernel (but not readable/writable in user mode), the user could choose an address that
-corresponded to kernel memory and would thus copy data from the ELF binary into the kernel. In
-the RISC-V version of xv6 this cannot happen, because the kernel has its own separate page table;
+We see that the text segment should be loaded at virtual address 0x0 in memory
+(without write permissions) from content at offset 0x1000 in the file.
+
+テキスト領域はメモリ上の仮想アドレス 0x0 へ (write パーミッションなしで)
+ファイル中のオフセット 0x1000 の内容からロードすべきということが分かる。
+
+We also see that the data should be loaded at address 0x1000,
+which is at a page boundary, and without executable permissions.
+
+また、データ領域はアドレス 0x1000 へ、実行パーミッションなしでロードすべきと分かる。
+0x1000 はページ境界である。
+
+A program section header’s filesz may be less than the memsz,
+indicating that the gap between them should be filled with zeroes
+(for C global variables) rather than read from the file.
+
+プログラムセクションヘッダの filesz は memsz より小さい可能性がある。
+これは両者の差分にあたる部分はファイルから読むのではなく
+ゼロで埋めるべき (C のグローバル変数のため) ということを示す。
+
+For /init, the data filesz is 0x10 bytes and memsz is 0x30 bytes,
+and thus uvmalloc allocates enough physical memory to hold 0x30 bytes,
+but reads only 0x10 bytes from the file /init.
+
+/init に関しては、データの filesz は 0x19 バイトで memsz は 0x30 バイトなので、
+uvmalloc は 0x30 バイトを保持するのに十分な物理メモリを確保するが、
+ファイル /init からは 0x10 バイトしか読まない。
+
+Now exec allocates and initializes the user stack.
+
+次に exec はユーザスタックを確保し初期化する。
+
+It allocates just one stack page.
+
+スタックを1ページだけ確保する。
+
+exec copies the argument strings to the top of the stack one at a time,
+recording the pointers to them in ustack.
+
+exec は引数文字列をスタックトップに1度に1つコピーし、
+ustack にそのポインタを記録していく。
+
+It places a null pointer at the end of what will be the argv list passed to main.
+
+main に渡される argv リストとなるものの最後にヌルポインタを置く。
+
+The first three entries in ustack are the fake return program counter,
+argc, and argv pointer.
+
+ustack の最初の3つのエントリはフェイクのリターンプログラムカウンタ
+argc、argv ポインタとなる。
+
+exec places an inaccessible page just below the stack page,
+so that programs that try to use more than one page will fault.
+
+exec はスタックページのすぐ下にアクセス不能なページを配置する。
+これにより1ページより多く使おうとするプログラムはフォールトを起こすことになる。
+
+This inaccessible page also allows exec to deal with arguments that are too large;
+in that situation, the copyout (kernel/vm.c:352) function that
+exec uses to copy arguments to the stack will notice that
+the destination page is not accessible, and will return -1.
+
+このアクセス不能なページにより exec は引数が大きすぎる事態にも対処することができる。
+そのような状況では、exec が引数をスタックにコピーするのに使うcopyout (`kernel/vm.c:352`) 関数は
+コピー先ページがアクセス不能であることに気づき、-1 を返す。
+
+During the preparation of the new memory image,
+if exec detects an error like an invalid program segment,
+it jumps to the label bad, frees the new image, and returns -1.
+
+exec must wait to free the old image until it is sure that the system call will succeed:
+if the old image is gone, the system call cannot return -1 to it.
+
+exec はシステムコールが成功するということが確かになるまで古いイメージを解放するのを
+待たなければならない。
+もし古いイメージが消えてしまうと、システムコールは -1 を返すことができない。
+
+The only error cases in exec happen during the creation of the image.
+
+exec 中のでエラーが起きるのはイメージの生成中のみだ。
+
+Once the image is complete, exec can commit to the new page table (kernel/exec.c:125)
+and free the old one (kernel/exec.c:129).
+
+イメージが完全ならば、exec は新しいページテーブルにコミットでき (`kernel/exec.c:125`)、
+古いページテーブルを解放できる (`kernel/exec.c:129`)。
+
+exec loads bytes from the ELF file into memory at addresses specified by the ELF file.
+
+exec は ELF ファイルから ELF ファイルに指定されたアドレスのメモリへバイト列をロードする。
+
+Users or processes can place whatever addresses they want into an ELF file.
+
+ユーザやプロセスは ELF ファイル中に好きなアドレスを書いておくことができる。
+
+Thus exec is risky, because the addresses in the ELF file may refer to the kernel,
+accidentally or on purpose.
+
+したがって exec はリスキーである。
+ELF ファイル中のアドレスは事故による偶然であれ、意図的であれ、
+カーネルを参照している可能性があるからだ。
+
+The consequences for an unwary kernel could range from a crash
+to a malicious subversion of the kernel’s isolation mechanisms
+(i.e., a security exploit).
+
+不用心なカーネルの結果はクラッシュからカーネルの隔離メカニズムの破壊
+(つまり、セキュリティエクスプロイト) まで多岐にわたる。
+
+Xv6 performs a number of checks to avoid these risks.
+
+xv6 はこれらの危険を回避するために数多くのチェックを行っている。
+
+For example if(ph.vaddr + ph.memsz < ph.vaddr) checks for
+whether the sum overflows a 64-bit integer.
+
+例えば `if(ph.vaddr + ph.memsz < ph.vaddr)` は和が 64 bit 整数を
+オーバーフローしないかをチェックしている。
+
+The danger is that a user could construct an ELF binary with a ph.vaddr
+that points to a user-chosen address, and ph.memsz large enough
+that the sum overflows to 0x1000, which will look like a valid value.
+
+ここでの危険というのは、ユーザが自分で選んだアドレスを指す ph.vaddr と、
+和がオーバーフローして 0x1000 (そしてこれは正しい値に見える。) になるように
+大きな ph.memsz を持ったELF バイナリを作れることだ。
+
+In an older version of xv6 in which the user address space also contained the kernel
+(but not readable/writable in user mode), the user could choose an address
+that corresponded to kernel memory and would thus copy data from the ELF binary into the kernel.
+
+ユーザアドレス空間がカーネルも含んでいた (しかしユーザモードからは読み書きできない)
+xv6 の古いバージョンでは、ユーザはカーネルメモリに対応するようなアドレスを選ぶことができ、
+したがって ELF バイナリからカーネルへデータをコピーできた。
+(注: おそらく x86 用バージョン)
+
+In the RISC-V version of xv6 this cannot happen,
+because the kernel has its own separate page table;
 loadseg loads into the process’s page table, not in the kernel’s page table.
-It is easy for a kernel developer to omit a crucial check, and real-world kernels have a long
-history of missing checks whose absence can be exploited by user programs to obtain kernel priv-
-ileges. It is likely that xv6 doesn’t do a complete job of validating user-level data supplied to the
-kernel, which a malicious user program might be able to exploit to circumvent xv6’s isolation.
-3.9 Real world
+
+RISC-V バージョンの xv6 ではこれは起こらない。
+なぜならカーネルは自分専用の独立したページテーブルを持っているからだ。
+loadseg はプロセスのページテーブルへロードするのであって、
+カーネルのページテーブルへではない。
+
+It is easy for a kernel developer to omit a crucial check,
+and real-world kernels have a long history of missing checks
+whose absence can be exploited by user programs to obtain kernel privileges.
+
+カーネル開発者が重要なチェックを怠ってしまうというのはよくあることで、
+実世界のカーネルにはユーザプログラムがカーネル権限を得られるような
+長いチェック漏れの歴史がある。
+
+It is likely that xv6 doesn’t do a complete job of validating user-level data
+supplied to the kernel, which a malicious user program might be able to
+exploit to circumvent xv6’s isolation.
+
+xv6 はカーネルに与えられるユーザレベルデータの検証を完全に行えていない可能性が高く、
+そうだとしたら悪意のあるユーザプログラムが xv6 の分離を回避できてしまうだろう。
+
+## Real world
+
 Like most operating systems, xv6 uses the paging hardware for memory protection and mapping.
-Most operating systems make far more sophisticated use of paging than xv6 by combining paging
-and page-fault exceptions, which we will discuss in Chapter 4.
-Xv6 is simplified by the kernel’s use of a direct map between virtual and physical addresses, and
-by its assumption that there is physical RAM at address 0x8000000, where the kernel expects to be
-loaded. This works with QEMU, but on real hardware it turns out to be a bad idea; real hardware
-places RAM and devices at unpredictable physical addresses, so that (for example) there might
-be no RAM at 0x8000000, where xv6 expect to be able to store the kernel. More serious kernel
-41
-designs exploit the page table to turn arbitrary hardware physical memory layouts into predictable
-kernel virtual address layouts.
-RISC-V supports protection at the level of physical addresses, but xv6 doesn’t use that feature.
-On machines with lots of memory it might make sense to use RISC-V’s support for “super
-pages.” Small pages make sense when physical memory is small, to allow allocation and page-out
-to disk with fine granularity. For example, if a program uses only 8 kilobytes of memory, giving
-it a whole 4-megabyte super-page of physical memory is wasteful. Larger pages make sense on
-machines with lots of RAM, and may reduce overhead for page-table manipulation.
+
+ほとんどのオペレーティングシステムと同様に、xv6 はページングハードウェアを
+メモリ保護やマッピングのために用いている。
+
+Most operating systems make far more sophisticated use of paging than xv6
+by combining paging and page-fault exceptions, which we will discuss in Chapter 4.
+
+ほとんどのオペレーティングシステムはページングとページフォルト例外を組み合わせることによって、
+xv6 よりもはるかに高度なページングの使い方をしている。
+これについては4章で議論する。
+
+Xv6 is simplified by the kernel’s use of a direct map between virtual and physical addresses,
+and by its assumption that there is physical RAM at address 0x8000000,
+where the kernel expects to be loaded.
+
+xv6 はカーネルが仮想と物理アドレスの間でダイレクトマップを使用することと、
+物理 RAM がアドレス 0x8000_0000 (ここにカーネルがロードされると期待する) にあると
+仮定することによって単純化されている。
+
+This works with QEMU, but on real hardware it turns out to be a bad idea;
+real hardware places RAM and devices at unpredictable physical addresses,
+so that (for example) there might be no RAM at 0x8000000,
+where xv6 expect to be able to store the kernel.
+
+これは QEMU ではうまくいくが、現実のハードウェア上では悪いアイデアだとわかる。
+現実のハードウェアは RAM やデバイスをあらかじめ予測できない物理アドレスに置くので、
+その結果 (例えば) 0x8000_0000、ここは xv6 がカーネルが格納されると期待する場所である、
+には RAM がないかもしれない。
+
+More serious kernel designs exploit the page table
+to turn arbitrary hardware physical memory layouts into
+predictable kernel virtual address layouts.
+
+より本格的なカーネル設計では、任意のハードウェア物理メモリレイアウトを
+予測可能なカーネル仮想アドレスレイアウトに変換するためにページテーブルを活用する。
+
+RISC-V supports protection at the level of physical addresses,
+but xv6 doesn’t use that feature.
+
+RISC-V は物理アドレスレベルでの保護をサポートするが、xv6 はその機能を使用していない。
+
+On machines with lots of memory
+it might make sense to use RISC-V’s support for “super pages.”
+
+多くのメモリを積んだマシンでは、RISC-V がサポートする「スーパーページ」を使用するのが
+よいかもしれない。
+
+Small pages make sense when physical memory is small,
+to allow allocation and page-out to disk with fine granularity.
+
+スモールページは物理メモリが小さい時に有効である。
+アロケーションやディスクへのページアウトを細かい粒度で行えるからだ。
+
+For example, if a program uses only 8 kilobytes of memory,
+giving it a whole 4-megabyte super-page of physical memory is wasteful.
+
+例えば、プログラムが 8KB のメモリしか使わないのならば、
+物理メモリ中の 4 MB スーパーページ全体を与えるのは無駄が多い。
+
+Larger pages make sense on machines with lots of RAM,
+and may reduce overhead for page-table manipulation.
+
+より大きなページは RAM の多いマシン上で有効であり、
+ページテーブル操作のオーバーヘッドを低減できる。
+
 The xv6 kernel’s lack of a malloc-like allocator that can provide memory for small objects
-prevents the kernel from using sophisticated data structures that would require dynamic allocation.
-A more elaborate kernel would likely allocate many different sizes of small blocks, rather than (as
-in xv6) just 4096-byte blocks; a real kernel allocator would need to handle small allocations as
-well as large ones.
-Memory allocation is a perennial hot topic, the basic problems being efficient use of limited
-memory and preparing for unknown future requests [9]. Today people care more about speed than
-space efficiency.
+prevents the kernel from using sophisticated data structures
+that would require dynamic allocation.
+
+xv6 カーネルは小さなオブジェクトのためのメモリを提供できる malloc ライクなアロケータを欠いているので、
+カーネルは動的確保を必要とするような高度なデータ構造を使用できない。
+
+A more elaborate kernel would likely allocate many different sizes of small blocks,
+rather than (as in xv6) just 4096-byte blocks;
+a real kernel allocator would need to handle small allocations as well as large ones.
+
+より複雑なカーネルでは、(xv6 のように) ちょうど 4096 バイトのブロックというよりは、
+たくさんの異なるサイズの小さなブロックが確保されることが多い。
+現実のカーネルアロケータは大きなものだけでなく、小さなアロケーションもハンドルする必要がある。
+
+Memory allocation is a perennial hot topic,
+the basic problems being efficient use of limited memory and
+preparing for unknown future requests [9].
+
+メモリアロケーションは永遠にホットなトピックであり、
+基本的な問題は、限られたメモリを効率的に使用することと、
+未知の未来のリクエストに対して備えることである。
+
+Today people care more about speed than space efficiency.
+
+今日では、空間効率よりも速度が優先されることが多い。
 
 ## Exercises
 
-* Parse RISC-V’s device tree to find the amount of physical memory the computer has.
-* RISC-V のデバイスツリーをパースし、コンピュータが持つ物理メモリの量を発見せよ。
-* Write a user program that grows its address space by one byte by calling sbrk(1). Run
-the program and investigate the page table for the program before the call to sbrk and after
-the call to sbrk. How much space has the kernel allocated? What does the PTE for the new
-memory contain?
+1. Parse RISC-V’s device tree to find the amount of physical memory the computer has.
+1. Write a user program that grows its address space by one byte by calling sbrk(1).
+  Run the program and investigate the page table for the program
+  before the call to sbrk and after the call to sbrk.
+  How much space has the kernel allocated?
+  What does the PTE for the new memory contain?
 1. Modify xv6 to use super pages for the kernel.
-1. Unix implementations of exec traditionally include special handling for shell scripts. If the
-file to execute begins with the text #!, then the first line is taken to be a program to run to
-interpret the file. For example, if exec is called to run myprog arg1 and myprog ’s first
-line is #!/interp, then exec runs /interp with command line /interp myprog arg1.
-Implement support for this convention in xv6.
+1. Unix implementations of exec traditionally include special handling for shell scripts.
+  If the file to execute begins with the text #!,
+  then the first line is taken to be a program to run to interpret the file.
+  For example, if exec is called to run myprog arg1 and myprog ’s first
+  line is #!/interp, then exec runs /interp with command line /interp myprog arg1.
+  Implement support for this convention in xv6.
 1. Implement address space layout randomization for the kernel.
+
+訳
+
+1. RISC-V のデバイスツリーをパースし、コンピュータが持つ物理メモリの量を発見せよ。
+1. sbrk(1) を呼ぶことでアドレス空間を1バイトずつ拡張するユーザプログラムを書け。
+  そのプログラムを実行し、sbrk を呼ぶ前と後でそのプログラムのページテーブルが
+  どうなるか調査せよ。
+  カーネルはどれだけの領域を確保したか？
+  新しいメモリのための PTE には何が入っているか？
+1. カーネルについてはスーパーページを使用するよう、xv6 を変更せよ。
+1. exec の UNIX 実装には伝統的にシェルスクリプトのための特別な対応が含まれている。
+  実行するファイルがテキスト `#!` で始まっていれば、最初の行はこのファイルを解釈するために
+  実行されるプログラムとみなされる。
+  例えば、exec が `myprog arg1` を実行するために呼び出され myprog の最初の行が
+  `#!/interp` だった場合、exec は `/interp` をコマンドライン `/interp myprog arg1` で
+  実行する。
+  この変換のサポートを xv6 に実装せよ。
+1. アドレス空間レイアウトランダマイゼーション (ASLR) をカーネルに実装せよ。

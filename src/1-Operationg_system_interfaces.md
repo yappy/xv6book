@@ -1393,7 +1393,7 @@ isolate processes from each other,
 and provide mechanisms for controlled inter-process communication.
 
 どのようなオペレーティングシステムでも下層のハードウェア上で複数のプロセスを多重化する必要があり、
-プロセス同士を隔離する必要があり、
+プロセス同士を分離する必要があり、
 プロセス間通信のためのメカニズムを提供する必要がある。
 
 After studying xv6, you should be able to look at other,
