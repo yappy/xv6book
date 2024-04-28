@@ -2,83 +2,271 @@
 
 トラップとシステムコール
 
-There are three kinds of event which cause the CPU to set aside ordinary execution of instructions
-and force a transfer of control to special code that handles the event. One situation is a system
-call, when a user program executes the ecall instruction to ask the kernel to do something for
-it. Another situation is an exception: an instruction (user or kernel) does something illegal, such as
-divide by zero or use an invalid virtual address. The third situation is a device interrupt, when a
-device signals that it needs attention, for example when the disk hardware finishes a read or write
-request.
-This book uses trap as a generic term for these situations. Typically whatever code was execut-
-ing at the time of the trap will later need to resume, and shouldn’t need to be aware that anything
-special happened. That is, we often want traps to be transparent; this is particularly important for
-device interrupts, which the interrupted code typically doesn’t expect. The usual sequence is that
-a trap forces a transfer of control into the kernel; the kernel saves registers and other state so that
-execution can be resumed; the kernel executes appropriate handler code (e.g., a system call imple-
-mentation or device driver); the kernel restores the saved state and returns from the trap; and the
-original code resumes where it left off.
-Xv6 handles all traps in the kernel; traps are not delivered to user code. Handling traps in the
-kernel is natural for system calls. It makes sense for interrupts since isolation demands that only
-the kernel be allowed to use devices, and because the kernel is a convenient mechanism with which
-to share devices among multiple processes. It also makes sense for exceptions since xv6 responds
-to all exceptions from user space by killing the offending program.
-Xv6 trap handling proceeds in four stages: hardware actions taken by the RISC-V CPU, some
-assembly instructions that prepare the way for kernel C code, a C function that decides what to
-do with the trap, and the system call or device-driver service routine. While commonality among
-the three trap types suggests that a kernel could handle all traps with a single code path, it turns
-out to be convenient to have separate code for three distinct cases: traps from user space, traps
-from kernel space, and timer interrupts. Kernel code (assembler or C) that processes a trap is often
-called a handler; the first handler instructions are usually written in assembler (rather than C) and
+There are three kinds of event which cause the CPU to set aside
+ordinary execution of instructions and force a transfer of control to special code
+that handles the event.
+
+CPU が通常の命令実行を一旦やめ、そのイベントをハンドルするための特別なコードに
+コントロールを強制的に移すようなものとして、3つの種類のイベントがある。
+
+One situation is a system call, when a user program executes the ecall instruction
+to ask the kernel to do something for it.
+
+1つ目の状況はシステムコールで、
+ユーザプログラムがカーネルに何かをするよう依頼するために ecall 命令を実行した時である。
+
+Another situation is an exception:
+an instruction (user or kernel) does something illegal,
+such as divide by zero or use an invalid virtual address.
+
+2つ目の状況は例外である。
+ある命令 (ユーザまたはカーネル) が  何か不正なことをした、
+例えば 0 で除算を行った、または不正な仮想アドレスを使用したといった場合である。
+
+The third situation is a device interrupt,
+when a device signals that it needs attention,
+for example when the disk hardware finishes a read or write request.
+
+3つ目の状況はデバイス割り込みで、
+あるデバイスが注意が必要であると知らせてきた場合である。
+例えばディスクハードウェアが読み取りまたは書き込みリクエストを完了した、等。
+
+This book uses trap as a generic term for these situations.
+
+本書ではトラップをこれらの状況を表す一般的な用語として使用する。
+
+Typically whatever code was executing at the time of the trap will later need to resume,
+and shouldn’t need to be aware that anything special happened.
+
+通常、トラップが発生した時点で実行中だったどんなコードも後で再開する必要があり、
+何か特別なことが起きたことを知る必要があるべきではない。
+
+That is, we often want traps to be transparent;
+this is particularly important for device interrupts,
+which the interrupted code typically doesn’t expect.
+
+つまり、我々は通常トラップは透過的であって欲しいと考える。
+これは特にデバイス割り込みに対して重要であり、
+割り込まれるコードは通常デバイス割り込みを想定していない。
+
+The usual sequence is that a trap forces a transfer of control into the kernel;
+the kernel saves registers and other state so that execution can be resumed;
+the kernel executes appropriate handler code (e.g., a system call implementation or device driver);
+the kernel restores the saved state and returns from the trap; and the original code resumes where it left off.
+
+通常のシーケンスではトラップはコントロールを強制的にカーネル内に移す。
+カーネルは実行を後で再開できるようにレジスタとその他の状態をセーブする。
+カーネルは適切なハンドラコード (例: システムコール実装やデバイスドライバ) を実行する。
+カーネルはセーブしていた状態をリストアし、トラップからリターンする。
+元のコードは中断した場所から再開する。
+
+Xv6 handles all traps in the kernel; traps are not delivered to user code.
+
+xv6 はすべてのトラップをカーネル内でハンドルする。
+トラップはユーザコードには配送されない。
+
+Handling traps in the kernel is natural for system calls.
+
+トラップをカーネル内でハンドルするのはシステムコールに対しては自然である。
+
+It makes sense for interrupts
+since isolation demands that only the kernel be allowed to use devices,
+and because the kernel is a convenient mechanism with which to share devices among multiple processes.
+
+割り込みに対しても理にかなっている。
+なぜなら分離の考え方がカーネルのみがデバイスを使えることを要求するからである。
+また、カーネルはデバイスを複数のプロセス間で共有する便利な方法だからでもある。
+
+It also makes sense for exceptions
+since xv6 responds to all exceptions from user space by killing the offending program.
+
+例外に対しても理にかなっている。
+xv6 はユーザ空間からの全ての例外に対して問題を起こしているプログラムを kill することによって
+応答するからだ。
+
+Xv6 trap handling proceeds in four stages:
+hardware actions taken by the RISC-V CPU,
+some assembly instructions that prepare the way for kernel C code,
+a C function that decides what to do with the trap,
+and the system call or device-driver service routine.
+
+Xv6 のトラップハンドリングは4つのステージで進む。
+RISC-V CPU によって行われるハードウェアアクション、
+カーネル C コードへの道を準備するいくつかのアセンブリ命令、
+そのトラップに対して何をするかを決定する C 関数、
+システムコールまたはデバイスドライバのサービスルーチン。
+
+While commonality among the three trap types suggests that
+a kernel could handle all traps with a single code path,
+it turns out to be convenient to have separate code for three distinct cases:
+traps from user space, traps from kernel space, and timer interrupts.
+
+3つのタイプのトラップの共通性から、カーネルは1つのコードパスで全てのトラップを
+処理することもできると考えられるが、
+3つの異なるケースそれぞれに別のコードを用意した方が便利であるとわかる。
+ユーザ空間からのトラップ、カーネル空間からのトラップ、タイマ割り込み。
+
+Kernel code (assembler or C) that processes a trap is often called a handler;
+the first handler instructions are usually written in assembler (rather than C) and
 are sometimes called a vector.
 
-4.1 RISC-V trap machinery
-Each RISC-V CPU has a set of control registers that the kernel writes to tell the CPU how to
-handle traps, and that the kernel can read to find out about a trap that has occurred. The RISC-V
-documents contain the full story [3]. riscv.h (kernel/riscv.h:1) contains definitions that xv6 uses.
-Here’s an outline of the most important registers:
-• stvec: The kernel writes the address of its trap handler here; the RISC-V jumps to the
-address in stvec to handle a trap.
-• sepc: When a trap occurs, RISC-V saves the program counter here (since the pc is then
-overwritten with the value in stvec). The sret (return from trap) instruction copies sepc
-to the pc. The kernel can write sepc to control where sret goes.
-• scause: RISC-V puts a number here that describes the reason for the trap.
-• sscratch: The trap handler code uses sscratch to help it avoid overwriting user registers
-before saving them.
-• sstatus: The SIE bit in sstatus controls whether device interrupts are enabled. If the
-kernel clears SIE, the RISC-V will defer device interrupts until the kernel sets SIE. The SPP
-bit indicates whether a trap came from user mode or supervisor mode, and controls to what
-mode sret returns.
-The above registers relate to traps handled in supervisor mode, and they cannot be read or
-written in user mode. There is a similar set of control registers for traps handled in machine mode;
-xv6 uses them only for the special case of timer interrupts.
-Each CPU on a multi-core chip has its own set of these registers, and more than one CPU may
-be handling a trap at any given time.
-When it needs to force a trap, the RISC-V hardware does the following for all trap types (other
-than timer interrupts):
-1. If the trap is a device interrupt, and the sstatus SIE bit is clear, don’t do any of the
-following.
-2. Disable interrupts by clearing the SIE bit in sstatus.
-3. Copy the pc to sepc.
-4. Save the current mode (user or supervisor) in the SPP bit in sstatus.
-5. Set scause to reflect the trap’s cause.
-6. Set the mode to supervisor.
-7. Copy stvec to the pc.
-44
-8. Start executing at the new pc.
-Note that the CPU doesn’t switch to the kernel page table, doesn’t switch to a stack in the
-kernel, and doesn’t save any registers other than the pc. Kernel software must perform these tasks.
-One reason that the CPU does minimal work during a trap is to provide flexibility to software;
-for example, some operating systems omit a page table switch in some situations to increase trap
-performance.
-It’s worth thinking about whether any of the steps listed above could be omitted, perhaps in
-search of faster traps. Though there are situations in which a simpler sequence can work, many
-of the steps would be dangerous to omit in general. For example, suppose that the CPU didn’t
-switch program counters. Then a trap from user space could switch to supervisor mode while still
-running user instructions. Those user instructions could break user/kernel isolation, for example by
-modifying the satp register to point to a page table that allowed accessing all of physical memory.
-It is thus important that the CPU switch to a kernel-specified instruction address, namely stvec.
+トラップを処理するカーネルコード (アセンブラまたは C) はよく (割り込み) ハンドラと呼ばれる。
+最初のハンドラ命令は通常 (C よりも) アセンブラで書かれ、(割り込み) ベクタと呼ばれることがある。
 
-4.2 Traps from user space
+## RISC-V trap machinery
+
+Each RISC-V CPU has a set of control registers that the kernel writes to tell the CPU
+how to handle traps, and that the kernel can read to find out about
+a trap that has occurred.
+
+各 RISC-V CPU はカーネルがどのようにトラップをハンドルするかを CPU に教えるために書き込む
+コントロールレジスタのセットを持っている。
+
+The RISC-V documents contain the full story [3].
+
+RISC-V のドキュメントにその全容が書かれている。
+
+riscv.h (kernel/riscv.h:1) contains definitions that xv6 uses.
+
+riscv.h `(kernel/riscv.h:1)` に xv6 が使う定義が書かれている。
+
+Here’s an outline of the most important registers:
+
+以下が最も重要なレジスタ群の概要である。
+
+* stvec: The kernel writes the address of its trap handler here;
+  the RISC-V jumps to the address in stvec to handle a trap.
+* stvec: カーネルはトラップハンドラのアドレスをここに書く。
+  RISC-V はトラップをハンドルするために stvec 内のアドレスにジャンプする。
+* sepc: When a trap occurs, RISC-V saves the program counter here
+  (since the pc is then overwritten with the value in stvec).
+  The sret (return from trap) instruction copies sepc to the pc.
+  The kernel can write sepc to control where sret goes.
+* sepc: トラップが発生した時、RISC-V はプログラムカウンタをここに保存する
+  (PC は stvec 内の値で上書きされてしまうため)。
+  sret (トラップから戻る) 命令は sepc を pc にコピーする。
+  カーネルは sepc に書き込むことで sret が行く先を制御することができる。
+* scause: RISC-V puts a number here that describes the reason for the trap.
+* RISC-V はトラップの理由を示す番号をここに置く。
+* sscratch: The trap handler code uses sscratch to help it
+  avoid overwriting user registers before saving them.
+* sscratch: トラップハンドラコードはユーザレジスタを保存する前に上書きしてしまうことを
+  回避するためにsscratch を使う。
+* sstatus: The SIE bit in sstatus controls whether device interrupts are enabled.
+  If the kernel clears SIE, the RISC-V will defer device interrupts
+  until the kernel sets SIE.
+  The SPP bit indicates whether a trap came from user mode or supervisor mode,
+  and controls to what mode sret returns.
+* sstatus: sstatus の中の SIE ビットはデバイス割り込みが有効かどうかを制御する。
+  もしカーネルが SIE をクリアしたなら、RISC-V はデバイス割り込みをカーネルが SIE を
+  セットするまで遅延させる。
+  SPP ビットはトラップがユーザモードかスーパーバイザモードのどちらから来たのかを示し、
+  sret がどのモードに返るのかを制御する。
+
+The above registers relate to traps handled in supervisor mode,
+and they cannot be read or written in user mode.
+
+上記のレジスタはスーパーバイザモードでハンドルされるトラップに関係しており、
+ユーザモードでは読み書きができない。
+
+There is a similar set of control registers for traps handled in machine mode;
+xv6 uses them only for the special case of timer interrupts.
+
+マシンモードでハンドルされるトラップに関しても似たレジスタセットがある。
+xv6 はタイマ割り込みという特別なケースにのみ使っている。
+
+Each CPU on a multi-core chip has its own set of these registers,
+and more than one CPU may be handling a trap at any given time.
+
+マルチコアチップの各 CPU はそれぞれ独自にこれらのレジスタを持っており、
+任意の時点で複数の CPU がトラップを処理している可能性がある。
+
+When it needs to force a trap, the RISC-V hardware does the following
+for all trap types (other than timer interrupts):
+
+トラップを発生させる必要がある時、RISC-V ハードウェアはすべてのトラップタイプ
+(タイマ割り込みを除く) に対して以下を行う。
+
+1. If the trap is a device interrupt, and the sstatus SIE bit is clear,
+  don’t do any of the following.
+1. Disable interrupts by clearing the SIE bit in sstatus.
+1. Copy the pc to sepc.
+1. Save the current mode (user or supervisor) in the SPP bit in sstatus.
+1. Set scause to reflect the trap’s cause.
+1. Set the mode to supervisor.
+1. Copy stvec to the pc.
+1. Start executing at the new pc.
+
+訳
+
+1. トラップがデバイス割り込みの場合、かつ sstatus SIE ビットがクリアされている場合、
+  以下は一切行わない。
+1. sstatus 内の SIE ビットをクリアすることによって割り込みを無効にする。
+1. pc を sepc にコピーする。
+1. 現在のモード (ユーザまたはスーパーバイザ) を sstatus の SPP ビットに保存する。
+1. scause にトラップの原因を反映させる。
+1. モードをスーパーバイザに設定する。
+1. stvec を pc にコピーする。
+1. 新しい pc から実行を開始する。
+
+Note that the CPU doesn’t switch to the kernel page table,
+doesn’t switch to a stack in the kernel,
+and doesn’t save any registers other than the pc.
+
+CPU はカーネルページテーブルを切り替えないこと、カーネルスタックに切り替えないこと、
+pc 以外の一切のレジスタを保存しないことに注意が必要である。
+
+Kernel software must perform these tasks.
+
+カーネルソフトウェアがこれらの仕事を行わなければならない。
+
+One reason that the CPU does minimal work during a trap is
+to provide flexibility to software;
+for example, some operating systems omit a page table switch in some situations
+to increase trap performance.
+
+CPU がトラップ中に最小限の仕事しか行わない一つの理由は、
+ソフトウェアに柔軟性を提供することである。
+例えば、オペレーティングシステムの中にはある状況下でトラップのパフォーマンスを上げるために
+ページテーブルのスイッチを省略するものもある。
+
+It’s worth thinking about whether any of the steps listed above could be omitted,
+perhaps in search of faster traps.
+
+より高速なトラップ処置を求めて
+上に挙げたステップのうちどれかを省略できないか考えてみる価値はあるだろう。
+
+Though there are situations in which a simpler sequence can work,
+many of the steps would be dangerous to omit in general.
+
+もっと簡単なシーケンスでうまくいく状況もあるが、
+一般的には省略するのは危険なステップが多い。
+
+For example, suppose that the CPU didn’t switch program counters.
+
+例えば、CPU がプログラムカウンタを切り替えなかったとしよう。
+
+Then a trap from user space could switch to supervisor mode while still running user instructions.
+
+その場合、ユーザ空間からのトラップはユーザ命令を実行中にスーパーバイザモードに
+切り替えられることになる。
+
+Those user instructions could break user/kernel isolation,
+for example by modifying the satp register to point to a page table
+that allowed accessing all of physical memory.
+
+そのようなユーザ命令はユーザ/カーネルの分離を破壊できてしまう。
+例えば satp レジスタを全ての物理メモリへのアクセス許すページテーブルを指すように
+変更することによって。
+
+It is thus important that the CPU switch to a kernel-specified instruction address,
+namely stvec.
+
+したがって CPU がカーネルの指定した命令アドレス、つまり stvec に切り替えるのは
+重要なことである。
+
+## Traps from user space
+
 Xv6 handles traps differently depending on whether the trap occurs while executing in the kernel
 or in user code. Here is the story for traps from user code; Section 4.5 describes traps from kernel
 code.
