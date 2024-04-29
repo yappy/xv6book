@@ -115,6 +115,8 @@ are sometimes called a vector.
 
 ## RISC-V trap machinery
 
+RISC-V のトラップ機構
+
 Each RISC-V CPU has a set of control registers that the kernel writes to tell the CPU
 how to handle traps, and that the kernel can read to find out about
 a trap that has occurred.
@@ -267,74 +269,287 @@ namely stvec.
 
 ## Traps from user space
 
+ユーザ空間からのトラップ
+
 Xv6 handles traps differently depending on whether the trap occurs while executing in the kernel
-or in user code. Here is the story for traps from user code; Section 4.5 describes traps from kernel
-code.
-A trap may occur while executing in user space if the user program makes a system call (ecall
-instruction), or does something illegal, or if a device interrupts. The high-level path of a trap from
-user space is uservec (kernel/trampoline.S:21), then usertrap (kernel/trap.c:37); and when re-
-turning, usertrapret (kernel/trap.c:90) and then userret (kernel/trampoline.S:101).
-A major constraint on the design of xv6’s trap handling is the fact that the RISC-V hardware
-does not switch page tables when it forces a trap. This means that the trap handler address in
-stvec must have a valid mapping in the user page table, since that’s the page table in force when
-the trap handling code starts executing. Furthermore, xv6’s trap handling code needs to switch to
-the kernel page table; in order to be able to continue executing after that switch, the kernel page
-table must also have a mapping for the handler pointed to by stvec.
-Xv6 satisfies these requirements using a trampoline page. The trampoline page contains uservec,
-the xv6 trap handling code that stvec points to. The trampoline page is mapped in every process’s
-page table at address TRAMPOLINE, which is at the top of the virtual address space so that it will be
-above memory that programs use for themselves. The trampoline page is also mapped at address
-TRAMPOLINE in the kernel page table. See Figure 2.3 and Figure 3.3. Because the trampoline
-page is mapped in the user page table, without the PTE_U flag, traps can start executing there in
-supervisor mode. Because the trampoline page is mapped at the same address in the kernel address
-space, the trap handler can continue to execute after it switches to the kernel page table.
-The code for the uservec trap handler is in trampoline.S (kernel/trampoline.S:21). When
-uservec starts, all 32 registers contain values owned by the interrupted user code. These 32
-values need to be saved somewhere in memory, so that they can be restored when the trap returns
-to user space. Storing to memory requires use of a register to hold the address, but at this point there
-45
-are no general-purpose registers available! Luckily RISC-V provides a helping hand in the form of
-the sscratch register. The csrw instruction at the start of uservec saves a0 in sscratch.
+or in user code.
+
+xv6 はトラップがカーネルまたはユーザコードのどちらを実行中に起きたかに応じて
+ハンドルの仕方を変える。
+
+Here is the story for traps from user code;
+Section 4.5 describes traps from kernel code.
+
+ここではユーザコードのトラップについて説明する。
+4.5 節でカーネルコードからのトラップを説明する。
+
+A trap may occur while executing in user space
+if the user program makes a system call (ecall instruction),
+or does something illegal, or if a device interrupts.
+
+ユーザ空間で実行中にトラップが発生する可能性があるのは、
+ユーザプログラムがシステムコールを呼んだ (ecall 命令) 場合、
+または何か不正なことをした場合、
+またはデバイスが割り込みをかけてきた場合である。
+
+The high-level path of a trap from user space is uservec (kernel/trampoline.S:21),
+then usertrap (kernel/trap.c:37);
+and when returning,
+usertrapret (kernel/trap.c:90) and then userret (kernel/trampoline.S:101).
+
+ユーザ空間からのトラップの大まかな経路は
+uservec (`kernel/trampoline.S:21`)、usertrap (`kernel/trap.c:37`)、
+そして戻る時は
+usertrapret (`kernel/trap.c:90`) そして userret (`kernel/trampoline.S:101`) である。
+
+A major constraint on the design of xv6’s trap handling is
+the fact that the RISC-V hardware does not switch page tables when it forces a trap.
+
+xv6 のトラップハンドリング設計上の大きな制約は、RISC-V ハードウェアがトラップする時に
+ページテーブルを切り替えないという事実である。
+
+This means that the trap handler address in stvec must have a valid mapping
+in the user page table, since that’s the page table in force
+when the trap handling code starts executing.
+
+これは stvec 内のトラップハンドラアドレスがユーザページテーブルで有効なマッピングを
+持っていなければならないということを意味する。
+これはトラップハンドリングコードが実行を開始した時に有効なページテーブルだからだ。
+
+Furthermore, xv6’s trap handling code needs to switch to
+the kernel page table;
+in order to be able to continue executing after that switch,
+the kernel page table must also have a mapping for the handler pointed to by stvec.
+
+さらに、xv6 のトラップハンドリングコードはカーネルページテーブルに切り替える必要がある。
+その切り替え後に実行を続けられるようにするために、カーネルページテーブルにも
+stvec が指すハンドラへのマッピングが必要である。
+
+Xv6 satisfies these requirements using a trampoline page.
+
+xv6 はこれらの要件をトランポリンページを使うことで満たしている。
+
+The trampoline page contains uservec, the xv6 trap handling code that stvec points to.
+
+トランポリンページには uservec が含まれており、
+uservec は stvec が指す先の、xv6 のトラップハンドリングコードである。
+
+The trampoline page is mapped in every process’s page table at address TRAMPOLINE,
+which is at the top of the virtual address space so that
+it will be above memory that programs use for themselves.
+
+このトランポリンページは全てのプロセスのページテーブルのアドレス TRAMPOLINE にマップされており、
+それはプログラムが自分のために使うメモリより上位になるよう、仮想アドレス空間の最上位にある。
+
+The trampoline page is also mapped at address TRAMPOLINE in the kernel page table.
+
+このトランポリンページはカーネルページテーブルのアドレス TRANPOLINE にもマップされている。
+
+See Figure 2.3 and Figure 3.3.
+
+図 2.3 と図3.3 を見よ。
+
+Because the trampoline page is mapped in the user page table,
+without the PTE_U flag, traps can start executing there in supervisor mode.
+
+トランポリンページはユーザページテーブルにマップされているため (PTE_U フラグはなし)、
+トラップはスーパバイザモードでそこから実行を開始することができる。
+
+Because the trampoline page is mapped at the same address in the kernel address space,
+the trap handler can continue to execute after it switches to the kernel page table.
+
+トランポリンページはカーネルアドレス空間の同じアドレスにマップされているので、
+トラップハンドラはカーネルページテーブルに切り替えた後も実行を続けることができる。
+
+The code for the uservec trap handler is in trampoline.S (kernel/trampoline.S:21).
+
+uservec トラップハンドラのためのコードは trampoline.S (`kernel/trampoline.S:21`) にある。
+
+When uservec starts, all 32 registers contain values owned by the interrupted user code.
+
+uservec の開始時、全ての 32 個のレジスタには割り込まれたユーザコードが持っていた値が入っている。
+
+These 32 values need to be saved somewhere in memory,
+so that they can be restored when the trap returns to user space.
+
+これらの 32 個の値はメモリのどこかにセーブしておく必要があり、
+そうすることでトラップがユーザ空間に戻る時にリストアすることができる。
+
+Storing to memory requires use of a register to hold the address,
+but at this point there are no general-purpose registers available!
+
+メモリへの格納にはアドレスを保持するレジスタを使用する必要性があるが、
+この時点では使用可能な汎用レジスタがない！
+
+Luckily RISC-V provides a helping hand in the form of the sscratch register.
+
+幸運にも RISC-V は sscratch レジスタという形で救いの手を差し伸べてくれる。
+
+The csrw instruction at the start of uservec saves a0 in sscratch.
+
+uservec の始まりにある scrw 命令が a0 を sscratch にセーブする。
+
 Now uservec has one register (a0) to play with.
-uservec’s next task is to save the 32 user registers. The kernel allocates, for each process, a
-page of memory for a trapframe structure that (among other things) has space to save the 32
-user registers (kernel/proc.h:43). Because satp still refers to the user page table, uservec needs
-the trapframe to be mapped in the user address space. Xv6 maps each process’s trapframe at virtual
-address TRAPFRAME in that process’s user page table; TRAPFRAME is just below TRAMPOLINE.
-The process’s p->trapframe also points to the trapframe, though at its physical address so the
-kernel can use it through the kernel page table.
+
+これで uservec には1つのレジスタ (a0) の遊びができた。
+
+uservec’s next task is to save the 32 user registers.
+
+uservec の次の仕事は 32 個のユーザレジスタをセーブすることだ。
+
+The kernel allocates, for each process, a page of memory for a trapframe structure
+that (among other things) has space to save the 32 user registers (kernel/proc.h:43).
+
+カーネルはプロセスごとに、32 個のユーザレジスタをセーブするための領域を含む
+トラップフレーム構造体のための1ページのメモリを確保している。
+
+Because satp still refers to the user page table,
+uservec needs the trapframe to be mapped in the user address space.
+
+satp はまだユーザページテーブルを指しているため、
+uservec にとってはトラップフレームはユーザアドレス空間にマップされていなければならない。
+
+Xv6 maps each process’s trapframe at virtual address TRAPFRAME
+in that process’s user page table;
+TRAPFRAME is just below TRAMPOLINE.
+
+xv6 は各プロセスのトラップフレームをそのプロセスのユーザページテーブルの
+仮想アドレス TRAPFRAM にマップする。
+TRAPFRAME は TRAMPOLINE のちょうどすぐ下である。
+
+The process’s p->trapframe also points to the trapframe,
+though at its physical address so the kernel can use it through the kernel page table.
+
+プロセスの `p->trapframe` も物理アドレスではあるがトラップフレームを指すので、
+カーネルはカーネルページテーブルからもそれを使うことができる。
+
 Thus uservec loads address TRAPFRAME into a0 and saves all the user registers there,
 including the user’s a0, read back from sscratch.
-The trapframe contains the address of the current process’s kernel stack, the current CPU’s
-hartid, the address of the usertrap function, and the address of the kernel page table. uservec
-retrieves these values, switches satp to the kernel page table, and calls usertrap.
-The job of usertrap is to determine the cause of the trap, process it, and return (kernel/-
-trap.c:37). It first changes stvec so that a trap while in the kernel will be handled by kernelvec
-rather than uservec. It saves the sepc register (the saved user program counter), because
-usertrap might call yield to switch to another process’s kernel thread, and that process might
-return to user space, in the process of which it will modify sepc. If the trap is a system call,
-usertrap calls syscall to handle it; if a device interrupt, devintr; otherwise it’s an ex-
-ception, and the kernel kills the faulting process. The system call path adds four to the saved user
-program counter because RISC-V, in the case of a system call, leaves the program pointer pointing
-to the ecall instruction but user code needs to resume executing at the subsequent instruction.
-On the way out, usertrap checks if the process has been killed or should yield the CPU (if this
-trap is a timer interrupt).
-The first step in returning to user space is the call to usertrapret (kernel/trap.c:90). This
-function sets up the RISC-V control registers to prepare for a future trap from user space. This in-
-volves changing stvec to refer to uservec, preparing the trapframe fields that uservec relies
-on, and setting sepc to the previously saved user program counter. At the end, usertrapret
-calls userret on the trampoline page that is mapped in both user and kernel page tables; the
-reason is that assembly code in userret will switch page tables.
-usertrapret’s call to userret passes a pointer to the process’s user page table in a0
-(kernel/trampoline.S:101). userret switches satp to the process’s user page table. Recall that the
-user page table maps both the trampoline page and TRAPFRAME, but nothing else from the kernel.
-The trampoline page mapping at the same virtual address in user and kernel page tables allows
-userret to keep executing after changing satp. From this point on, the only data userret
-can use is the register contents and the content of the trapframe. userret loads the TRAPFRAME
-address into a0, restores saved user registers from the trapframe via a0, restores the saved user
-a0, and executes sret to return to user space.
 
-4.3 Code: Calling system calls
+uservec はアドレス TRAPFRAME を a0 にロードし、そこに全てのユーザレジスタをセーブする。
+これにはユーザの a0 を含む。これは sscratch から読み戻せばよい。
+
+The trapframe contains the address of the current process’s kernel stack,
+the current CPU’s hartid, the address of the usertrap function,
+and the address of the kernel page table.
+
+トラップフレームには現在のプロセスのカーネルスタックのアドレス、
+現在の CPU の hartid、ユーザトラップ関数のアドレス、
+カーネルページテーブルのアドレスが含まれている。
+
+uservec retrieves these values, switches satp to the kernel page table,
+and calls usertrap.
+
+uservec はそれらの値を取得し、satp をカーネルページテーブルに切り替え、
+usertrap を呼ぶ。
+
+The job of usertrap is to determine the cause of the trap, process it,
+and return (kernel/trap.c:37).
+
+usertrap の仕事はトラップの原因を判定し、それを処理し、リターンすることである
+(`kernel/trap.c:3`)。
+
+It first changes stvec so that a trap while in the kernel
+will be handled by kernelvec rather than uservec.
+
+usertrap はまず stvec を、カーネル中でのトラップが uservec ではなく kernelvec で
+ハンドルされるように変更する。
+
+It saves the sepc register (the saved user program counter),
+because usertrap might call yield to switch to another process’s kernel thread,
+and that process might return to user space,
+in the process of which it will modify sepc.
+
+usertrap は sepc (割り込み前のプログラムカウンタ) レジスタをセーブする。
+これは usertrap は yield を呼び出して他のプロセスのカーネルスレッドに切り替える可能性があり、
+そのプロセスはユーザ空間にリターンする可能性があるからである。
+その過程で sepc は変更されることになる。
+
+If the trap is a system call, usertrap calls syscall to handle it;
+if a device interrupt, devintr;
+otherwise it’s an exception, and the kernel kills the faulting process.
+
+もしトラップがシステムコールなら、usertrap はそれを処理するために syscall を呼び出す。
+もしデバイス割り込みなら、devintr を呼び出す。
+それ以外なら例外であり、カーネルは問題を起こしているプロセスを kill する。
+
+The system call path adds four to the saved user program counter
+because RISC-V, in the case of a system call, leaves the program pointer
+pointing to the ecall instruction
+but user code needs to resume executing at the subsequent instruction.
+
+システムコールの経路ではセーブされているユーザのプログラムカウンタに 4 を足す。
+これは RISC-V はシステムコールの場合、プログラムカウンタを ecall 命令を指したままにするが、
+ユーザコードは次の命令から実行を再開する必要があるからだ。
+
+On the way out, usertrap checks if the process has been killed or
+should yield the CPU (if this trap is a timer interrupt).
+
+出口で、usertrap はプロセスが kill されていないか、または CPU を明け渡すべきでないか
+(もしこのトラップがタイマ割り込みだった場合)、を確認する。
+
+The first step in returning to user space is the call to usertrapret (kernel/trap.c:90).
+
+ユーザ空間へ戻る時の最初のステップは usertrapret (`kernel/trap.c:90`) を呼び出すことだ。
+
+This function sets up the RISC-V control registers to prepare for a future trap from user space.
+
+この関数はこれから先のユーザ空間からのトラップに備えるために、
+RISC-V のコントロールレジスタを設定する。
+
+This involves changing stvec to refer to uservec,
+preparing the trapframe fields that uservec relies on,
+and setting sepc to the previously saved user program counter.
+
+これには stvec を uservec を指すように切り替えること、
+uservec が頼っているトラップフレームのフィールドを準備すること、
+sepc を以前にセーブしたユーザプログラムカウンタの値に設定すること、が含まれる。
+
+At the end, usertrapret calls userret on the trampoline page
+that is mapped in both user and kernel page tables;
+the reason is that assembly code in userret will switch page tables.
+
+最後に、usertrapret はユーザとカーネル両方のページテーブルにマップされている
+トランポリンページ上の userret を呼ぶ。
+その理由は userret 内のアセンブリコードがページテーブルを切り替えるからである。
+
+usertrapret’s call to userret passes a pointer to the process’s user page table
+in a0 (kernel/trampoline.S:101).
+
+usertrapret による userret の呼び出しでは、プロセスのユーザページテーブルへのポインタを
+a0 で渡す (`kernel/trampoline.S:101`)。
+
+userret switches satp to the process’s user page table.
+
+userret は sapt をプロセスのユーザページテーブルへ切り替える。
+
+Recall that the user page table maps both the trampoline page and TRAPFRAME,
+but nothing else from the kernel.
+
+ユーザページテーブルはトランポリンページとトラップフレームの両方をマップしているが、
+その他には何もカーネルからマップしていないことを思い出そう。
+
+The trampoline page mapping at the same virtual address in user and kernel page tables
+allows userret to keep executing after changing satp.
+
+トランポリンページがユーザとカーネルページテーブルで同じ仮想アドレスにマップされていることで、
+userret は satp を変更した後もそのまま実行を続けることができる。
+
+From this point on, the only data userret can use is
+the register contents and the content of the trapframe.
+
+この時点から、userret が使えるデータはレジスタの内容とトラップフレームの内容だけになる。
+
+userret loads the TRAPFRAME address into a0,
+restores saved user registers from the trapframe via a0,
+restores the saved user a0, and executes sret to return to user space.
+
+userret は TRAPFRAME アドレスを a0 にロードし、
+セーブされていたユーザレジスタをトラップフレームから a0 経由でリストアし、
+セーブされていた a0 をリストアし、そして sret を実行してユーザ空間に戻る。
+
+## Code: Calling system calls
+
 Chapter 2 ended with initcode.S invoking the exec system call (user/initcode.S:11). Let’s look
 at how the user call makes its way to the exec system call’s implementation in the kernel.
 initcode.S places the arguments for exec in registers a0 and a1, and puts the system call
