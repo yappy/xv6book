@@ -550,6 +550,8 @@ userret は TRAPFRAME アドレスを a0 にロードし、
 
 ## Code: Calling system calls
 
+コード: システムコールの呼び出し
+
 Chapter 2 ended with initcode.S invoking the exec system call (user/initcode.S:11). Let’s look
 at how the user call makes its way to the exec system call’s implementation in the kernel.
 initcode.S places the arguments for exec in registers a0 and a1, and puts the system call
@@ -714,40 +716,136 @@ uses the page, the operating system may have evicted it.
 Other features that combine paging and page-fault exceptions include automatically extending
 stacks and memory-mapped files.
 
-4.7 Real world
-The trampoline and trapframe may seem excessively complex. A driving force is that the RISC-
-V intentionally does as little as it can when forcing a trap, to allow the possibility of very fast
-trap handling, which turns out to be important. As a result, the first few instructions of the kernel
-trap handler effectively have to execute in the user environment: the user page table, and user
-register contents. And the trap handler is initially ignorant of useful facts such as the identity of
-the process that’s running or the address of the kernel page table. A solution is possible because
-RISC-V provides protected places in which the kernel can stash away information before entering
-user space: the sscratch register, and user page table entries that point to kernel memory but
-are protected by lack of PTE_U. Xv6’s trampoline and trapframe exploit these RISC-V features.
-The need for special trampoline pages could be eliminated if kernel memory were mapped
-into every process’s user page table (with appropriate PTE permission flags). That would also
-eliminate the need for a page table switch when trapping from user space into the kernel. That
-in turn would allow system call implementations in the kernel to take advantage of the current
-process’s user memory being mapped, allowing kernel code to directly dereference user pointers.
-Many operating systems have used these ideas to increase efficiency. Xv6 avoids them in order to
-reduce the chances of security bugs in the kernel due to inadvertent use of user pointers, and to
-reduce some complexity that would be required to ensure that user and kernel virtual addresses
-don’t overlap.
-Production operating systems implement copy-on-write fork, lazy allocation, demand paging,
-paging to disk, memory-mapped files, etc. Furthermore, production operating systems will try to
-use all of physical memory, either for applications or caches (e.g., the buffer cache of the file
-system, which we will cover later in Section 8.2). Xv6 is naïve in this regard: you want your
-operating system to use the physical memory you paid for, but xv6 doesn’t. Furthermore, if xv6
-runs out of memory, it returns an error to the running application or kills it, instead of, for example,
+## Real world
+
+The trampoline and trapframe may seem excessively complex.
+
+トランポリンとトラップフレームは非常に複雑に見えるかもしれない。
+
+A driving force is that the RISC-V intentionally does as little as it can
+when forcing a trap, to allow the possibility of very fast trap handling,
+which turns out to be important.
+
+その動機は、RISC-V はトラップを発生させる時に意図的に可能な限り何もしないことで、
+非常に高速なトラップハンドリングを可能にすることであり、
+それは重要なことである。
+
+As a result, the first few instructions of the kernel trap handler
+effectively have to execute in the user environment:
+the user page table, and user register contents.
+
+その結果、カーネルトラップハンドラの最初の数命令はユーザ環境で実行される必要がある。
+ユーザ環境: ユーザページテーブルとユーザレジスタの内容。
+
+And the trap handler is initially ignorant of useful facts such as
+the identity of the process that’s running or the address of the kernel page table.
+
+そしてトラップハンドラは最初、実行中のプロセスが何であるかや
+カーネルページテーブルのアドレスといった有用な情報を知らない。
+
+A solution is possible because RISC-V provides protected places
+in which the kernel can stash away information before entering user space:
+the sscratch register, and user page table entries that point to kernel memory
+but are protected by lack of PTE_U.
+
+RISC-V はカーネルがユーザ空間に入る前に情報を隠しておける保護された場所を提供しているため、
+解決することが可能になる。
+sscratch レジスタと、カーネルメモリを指すが PTE_U をつけないことで保護された
+ユーザページテーブルエントリ。
+
+Xv6’s trampoline and trapframe exploit these RISC-V features.
+
+xv6 のトランポリンとトラップフレームは RISC-V の機能をうまく使っている。
+
+The need for special trampoline pages could be eliminated
+if kernel memory were mapped into every process’s user page table
+(with appropriate PTE permission flags).
+
+特別なトランポリンページの必要性は、もしカーネルメモリが全てのプロセスのユーザページテーブルに
+(適切な PTE パーミッションフラグで) マップされていれば、なくすことができる。
+
+That would also eliminate the need for a page table switch when trapping from user space into the kernel.
+
+そうすればユーザ空間からカーネルへトラップする時にページテーブルを切り替える必要もなくなる。
+
+That in turn would allow system call implementations in the kernel
+to take advantage of the current process’s user memory being mapped,
+allowing kernel code to directly dereference user pointers.
+
+その結果、カーネル内のシステムコール実装は現在のプロセスのユーザメモリがマップされている
+ことを利用し、カーネルコードがユーザポインタを直接デリファレンスできるようになる。
+
+Many operating systems have used these ideas to increase efficiency.
+
+多くのオペレーティングシステムがこれらのアイデアを効率性を高めるために使用している。
+
+Xv6 avoids them in order to reduce the chances of security bugs in the kernel
+due to inadvertent use of user pointers,
+and to reduce some complexity that would be required to ensure that
+user and kernel virtual addresses don’t overlap.
+
+xv6 はユーザポインタの不注意な使用によるカーネルのセキュリティバグの可能性を減らすため、
+また、ユーザとカーネルの仮想アドレスが被らないよう保証するために必要になる
+複雑性を減らすため、そのアイデアの使用を避けている。
+
+Production operating systems implement copy-on-write fork, lazy allocation,
+demand paging, paging to disk, memory-mapped files, etc.
+
+製品レベルのオペレーティングシステムは copy-on-write fork、lazy allocation、
+デマンドページング、ディスクへのページング、メモリマップトファイル、等を実装している。
+
+Furthermore, production operating systems will try to use all of physical memory,
+either for applications or caches
+(e.g., the buffer cache of the file system, which we will cover later in Section 8.2).
+
+さらに、製品レベルのオペレーティングシステムは、アプリケーションやキャッシュのために
+全ての物理メモリを使い切ろうとする。
+(例: ファイルシステムのバッファキャッシュ、これについては 8.2 節でカバーする。)
+
+Xv6 is naïve in this regard:
+you want your operating system to use the physical memory you paid for,
+but xv6 doesn’t.
+
+この点において xv6 はナイーブだ。
+あなたはオペレーティングシステムにあなたがお金を払って買った物理メモリを使ってほしいと
+思うだろうが、xv6 はそうしない。
+
+Furthermore, if xv6 runs out of memory, it returns an error
+to the running application or kills it, instead of, for example,
 evicting a page of another application.
-4.8 Exercises
-1. The functions copyin and copyinstr walk the user page table in software. Set up
-the kernel page table so that the kernel has the user program mapped, and copyin and
-copyinstr can use memcpy to copy system call arguments into kernel space, relying on
-the hardware to do the page table walk.
-2. Implement lazy memory allocation.
-3. Implement COW fork.
-4. Is there a way to eliminate the special TRAPFRAME page mapping in every user address
-space? For example, could uservec be modified to simply push the 32 user registers onto
-the kernel stack, or store them in the proc structure?
-5. Could xv6 be modified to eliminate the special TRAMPOLINE page mapping?
+
+さらに、xv6 はメモリを使い切ると、実行中のアプリケーションにエラーを返す、
+またはそれを kill する。
+例えば、他のアプリケーションのページを退避するのではなく。
+(注: メモリ不足の際にページをディスクに書き出すスワップの仕組み等は無いと言っている。)
+
+## Exercises
+
+1. The functions copyin and copyinstr walk the user page table in software.
+  Set up the kernel page table so that the kernel has the user program mapped,
+  and copyin and copyinstr can use memcpy to copy system call arguments into kernel space,
+  relying on the hardware to do the page table walk.
+1. Implement lazy memory allocation.
+1. Implement COW fork.
+1. Is there a way to eliminate the special TRAPFRAME page mapping
+  in every user address space?
+  For example, could uservec be modified to simply push the 32 user registers
+  onto the kernel stack, or store them in the proc structure?
+1. Could xv6 be modified to eliminate the special TRAMPOLINE page mapping?
+
+訳
+
+1. copyin および copyinstr 関数はソフトウェアでユーザページテーブルをウォークする。
+  カーネルがユーザプログラムをマップし、
+  ハードウェアがページテーブルウォークを行うことにより
+  copyin と copyinstr が memcpy を使ってシステムコールの引数をカーネル空間へコピーできるように
+  カーネルページテーブルを設定せよ。
+  (copyin 系の関数はソフトウェアウォークで実装されているので、ページテーブルの設定により
+  ハードウェアページテーブルウォークと memcpy で実装しなおせ。)
+1. Lazy Memory Allocation を実装せよ。
+1. COW fork を実装せよ。
+1. 特別な TRAPFRAME ページを全てのユーザアドレス空間にマップするのを
+  やめる方法はあるだろうか？
+  例えば、uservec が単に 32 個のユーザレジスタをカーネルスタックにプッシュする、
+  または proc 構造体に格納するということはできるだろうか？
+1. xv6 を変更して特別な TRAMPOLINE ページマッピングをやめることはできるだろうか？
